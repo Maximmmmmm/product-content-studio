@@ -1,0 +1,42 @@
+# dependencies
+node_modules/
+
+# build output
+backend/dist/
+frontend/.next/
+frontend/out/
+
+# environment files (never commit secrets)
+.env
+.env.local
+*.env
+!.env.example
+!*.env.example
+
+# database
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# logs
+*.log
+npm-debug.log*
+
+# typescript build info
+*.tsbuildinfo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# test coverage
+coverage/
+
+# Next.js
+frontend/next-env.d.ts

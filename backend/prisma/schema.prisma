@@ -1,0 +1,52 @@
+// Prisma schema for Product Content Studio.
+//
+// Database: SQLite (a single file, so a reviewer needs no database server).
+// Note: the SQLite connector does not support Prisma enums, so `Product.status`
+// is a String constrained to 'draft' | 'published' by the API's validation DTOs
+// and by the ProductStatus constant in src/products/product-status.ts.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// The administrator who signs in to the admin area.
+/// Registration, password recovery and roles are out of scope, so this table
+/// only ever holds the seeded test administrator.
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+}
+
+/// A product card. Name and characteristics are factual data that the editor
+/// may only read; description, SEO fields and status are editable.
+model Product {
+  id   String @id @default(cuid())
+  /// Used for public product URLs (/products/:slug).
+  slug String @unique
+
+  /// Read-only in the application.
+  name String
+  /// Read-only in the application. JSON-encoded array of { label, value }
+  /// pairs, because SQLite has no native JSON column type.
+  characteristics String
+
+  /// Editable content, validated server-side (see UpdateProductDto).
+  description    String
+  seoTitle       String
+  seoDescription String
+
+  /// 'draft' | 'published'. Controls public visibility.
+  status String @default("draft")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
