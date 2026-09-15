@@ -296,6 +296,13 @@ Verification (all actually run):
   invalid and had to be redone.
 - Development data was restored to its seeded values afterwards.
 
+**Correction made during Phase 6:** that last claim was not fully true. The `curl` command
+used to restore the data on Windows mangled the em-dash (U+2014) in `seoTitle` into the
+Unicode replacement character (U+FFFD), so the row was restored *almost* correctly and the
+corruption went unnoticed. It was found in Phase 6 while verifying page metadata, traced to
+the shell quoting rather than to the application, and properly repaired. The application
+itself round-trips UTF-8 correctly — see `AI-WORKLOG.md` entry 8.
+
 Proposed commit: `feat: add product REST API with server-side validation`
 
 ---
@@ -377,20 +384,58 @@ Proposed commit: `feat: add admin product list and editor`
 
 ## Phase 6 — Public catalogue and product pages
 
-Status: NOT STARTED
+Status: **COMPLETE**
 
-Implement:
-- Catalogue page listing published products with links.
-- Product page showing name, characteristics and the saved description.
-- `generateMetadata` producing the page title and description from the stored SEO fields.
-- A draft slug calls `notFound()`.
-- Product content is rendered as React text nodes — no `dangerouslySetInnerHTML` anywhere.
+Implemented:
+- `lib/server-api.ts` — a separate server-side client for the public API. Deliberately not
+  `lib/api.ts`: that one sends `credentials: 'include'`, which is meaningless here. These
+  calls carry no cookie, so they can only ever see what an anonymous visitor sees.
+- Both public fetches use `cache: 'no-store'`. Publishing or unpublishing must take effect
+  immediately; a cached catalogue could keep serving a product the manager has just
+  unpublished, which is exactly the leak the draft rule exists to prevent. This makes `/` a
+  dynamic route, which is the correct trade-off here.
+- Catalogue (`/`) — replaces the create-next-app landing page. Lists published products in a
+  responsive grid (one column on mobile, two from `sm:`), each linking to its page.
+- Product page (`/products/[slug]`) — name, description and a specifications list. `params` is
+  awaited, as Next 16 requires in server components.
+- `generateMetadata` sets `title` and `description` from the stored SEO fields. The fetch is
+  wrapped in React's `cache()` so the page and its metadata share one request rather than
+  relying on fetch memoisation behaving a particular way.
+- A draft slug and an unknown slug both produce `notFound()` — the API returns 404 for both,
+  so this layer cannot tell them apart either.
+- `app/not-found.tsx` gives both cases the same page.
+- Root layout metadata replaced (it still said "Create Next App").
 
-Verification:
-- Published products appear; drafts do not.
-- A draft URL returns 404.
-- The rendered HTML contains `<title>` and `<meta name="description">` from the SEO fields.
-- A `<script>` payload stored in a description appears as visible text, not executed.
+Security — product content cannot execute:
+- Content is rendered as React text nodes, which React escapes.
+- **`react/no-danger` was added as an ESLint error**, so `dangerouslySetInnerHTML` fails the
+  build anywhere in the frontend. This is a stronger guarantee than a test because it also
+  covers code that has not been written yet. The rule was verified to actually fire by
+  temporarily adding a component that used `dangerouslySetInnerHTML` — it errored, and the
+  file was deleted.
+- A backend e2e test pins the deliberate architectural choice that content is stored
+  **verbatim** and escaped at render, rather than sanitised on input: there is then no
+  sanitiser that can be wrong or bypassed. If input sanitising is added later, that test fails
+  and forces the decision to be made consciously.
+
+Verification (all actually run):
+- Backend e2e: **56/56 passing** (one new test for verbatim storage).
+- Frontend: 10/10 tests, lint clean, typecheck clean, format clean, build clean (6 routes).
+- Against both servers running: the catalogue listed only the two published products (the
+  draft was absent); `/products/nimbus-standing-desk-mat` (draft) → **404**;
+  `/products/no-such-thing` → 404; `/products/aurora-wireless-headphones` → 200.
+- Page metadata compared byte-for-byte against what the API stores: `<title>` and
+  `<meta name="description">` both matched the stored `seoTitle` / `seoDescription`.
+- **XSS verified end-to-end with a real stored payload.** A product's description was set to
+  `<script>window.__XSS_EXECUTED__=true;alert("xss")</script> and <img src=x
+  onerror="alert(1)"> and <b>bold</b>`, its `seoTitle` to `<script>alert("seo")</script>`, and
+  its `seoDescription` to `"><script>alert("meta")</script>` — the last being the classic
+  attribute-breakout attack. The rendered HTML contained: **zero** live `<script>` elements
+  carrying the payload, no raw unescaped markup, no live `onerror` attribute, and the escaped
+  form `&lt;script&gt;` present, proving it rendered as visible text. The `<title>` came
+  through as `&lt;script&gt;alert(&quot;seo&quot;)&lt;/script&gt;` and the meta description as
+  `&quot;&gt;&lt;script&gt;...`, so the breakout attempt was escaped too. The product was then
+  restored.
 
 Proposed commit: `feat: add public catalogue and product pages`
 

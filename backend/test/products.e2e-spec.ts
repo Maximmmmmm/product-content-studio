@@ -490,6 +490,36 @@ describe('Products (e2e)', () => {
       ).not.toContain(PUBLISHED_SLUG);
     });
 
+    /**
+     * Pins a deliberate architectural choice: content is stored exactly as the
+     * author typed it and escaped when rendered, rather than sanitised on the
+     * way in.
+     *
+     * Storing raw text means there is no sanitiser that can be wrong or
+     * bypassed, and the frontend renders it as a React text node (with the
+     * `react/no-danger` ESLint rule preventing `dangerouslySetInnerHTML`
+     * anywhere). If someone later adds input sanitising, this test fails and
+     * forces that decision to be made consciously.
+     */
+    it('stores and returns author content verbatim, without sanitising it', async () => {
+      const payload = '<script>alert("xss")</script> & <b>bold</b>';
+
+      await request(app.getHttpServer())
+        .patch(`/admin/products/${publishedId}`)
+        .set('Cookie', cookie)
+        .send(validPayload({ description: payload }))
+        .expect(200);
+
+      const response = await request(app.getHttpServer())
+        .get(`/products/${PUBLISHED_SLUG}`)
+        .expect(200);
+
+      // Byte-for-byte what was submitted: not stripped, not HTML-encoded.
+      expect(bodyOf<{ description: string }>(response).description).toBe(
+        payload,
+      );
+    });
+
     it('trims surrounding whitespace before storing', async () => {
       await request(app.getHttpServer())
         .patch(`/admin/products/${publishedId}`)

@@ -566,6 +566,80 @@ is asserted by neither, and is not claimed.
 
 ---
 
+## 2026-09-15 — Entry 8: a verification tool that corrupted the data it was checking
+
+### Task
+
+Phase 6 built the public catalogue and product pages, including page metadata generated from
+the stored SEO fields. Verifying that metadata meant comparing what the page rendered against
+what the database actually held.
+
+### AI contribution
+
+Claude Code compared the two and found the page's `<title>` rendered as:
+
+```
+Aurora Wireless Headphones � 30h Battery, ANC
+```
+
+The obvious reading was "the terminal cannot display an em dash". Instead of assuming that,
+it checked the code points and found `U+FFFD` — the Unicode replacement character, which means
+the data was genuinely corrupt, not merely displayed oddly.
+
+Tracing it: the seed file contained a correct `U+2014` em dash, but the database row held
+`U+FFFD`. The corruption therefore had to have been introduced *after* seeding — and it was,
+by Claude Code's own Phase 4 manual verification. The `curl -d '{...}'` command used to restore
+the product after testing had passed an em dash through Windows shell quoting, which mangled
+it before it ever reached the API.
+
+To establish whether the fault lay in the application or the tool, the same round trip was
+repeated with a proper HTTP client instead of `curl`:
+
+```
+sent    : "Aurora Wireless Headphones — 30h Battery, ANC"
+returned: "Aurora Wireless Headphones — 30h Battery, ANC"
+round-trip intact: true
+codepoints: [ 'U+2014' ]
+```
+
+The application handles UTF-8 correctly. The bug was in the verification method.
+
+### Candidate contribution
+
+The standing rule against accepting a plausible explanation without checking it is what
+turned this up — "it's just the terminal" would have closed the question and left corrupt
+data in the repository's development database. I also required the earlier record to be
+corrected rather than silently fixed: Phase 4 had reported "development data was restored to
+its seeded values", which was not true.
+
+### Decision
+
+The data was repaired, and `docs/IMPLEMENTATION-PLAN.md` Phase 4 now carries an explicit
+correction noting that its restore claim was inaccurate and why.
+
+The wider lesson, which changed how the rest of Phase 6 was verified: **`curl` with inline
+shell-quoted JSON is not a reliable tool for non-ASCII payloads on this platform.** Every
+subsequent check in this phase — the UTF-8 round trip, the XSS payload test and the restore
+afterwards — was done with Node scripts using `fetch`, where the payload is encoded by the
+runtime rather than by the shell.
+
+### Verification
+
+```
+seed file        U+2014  (correct)
+database before  U+FFFD  (corrupt)
+curl round-trip  U+FFFD  (reproduces the corruption -> the tool is at fault)
+fetch round-trip U+2014  (intact -> the application is not at fault)
+page after fix   U+2014, no replacement character
+```
+
+### Repository evidence
+
+`backend/prisma/seed.ts` (the correct source value); `docs/IMPLEMENTATION-PLAN.md` Phase 4
+(the correction) and Phase 6.
+
+---
+
 ## Required concrete examples
 
 The assignment asks for 2–3 concrete examples of AI-generated solutions that were evaluated
@@ -607,8 +681,18 @@ made exactly one test fail (`rejects 61 characters`), which is what proves that 
 actually constraining the limit. Several tests also assert the *stored row* rather than only
 the status code — a 400 response does not by itself show that nothing was written.
 
-**Where tests caught AI code, and where they did not.** Two AI mistakes in this project were
+**Where a static rule beats a test.** The "product content must not execute in the browser"
+requirement is enforced primarily by an ESLint rule (`react/no-danger` as an error), not by a
+test. A test can only cover the components that exist; the rule fails the build for any future
+component that reaches for `dangerouslySetInnerHTML`. The rule itself was verified to fire by
+temporarily writing a component that violated it — a rule that is silently inactive is worse
+than no rule, because it looks like protection.
+
+**Where tests caught AI code, and where they did not.** Three AI mistakes in this project were
 invisible to the test suite and were caught only by running things:
+
+- a `curl`-based restore that silently corrupted a stored em dash into `U+FFFD` (Entry 8), which
+  no test covered because the corruption was in the verification tooling, not the code;
 
 - the missing `class-validator` package (Entry 3) — lint, build and all tests passed while the
   application could not start, because none of them call `app.listen()`;

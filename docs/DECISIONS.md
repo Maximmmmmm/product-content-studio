@@ -398,6 +398,35 @@ assumed.
 Storing raw text and escaping at render time means there is no sanitiser to get wrong, and no
 code path where stored content can become executable markup.
 
+### 10a. How the no-execution guarantee is enforced (Phase 6)
+
+Three layers, in order of strength:
+
+1. **A build-time rule.** `react/no-danger` is an ESLint *error* in the frontend, so
+   `dangerouslySetInnerHTML` cannot be introduced anywhere without failing the build. This is
+   stronger than a test because it covers code that has not been written yet. The rule was
+   confirmed to actually fire by temporarily adding a component that used the property.
+2. **React's default escaping.** Content is rendered as text children (`{product.description}`)
+   and SEO fields go through `generateMetadata`, both of which escape.
+3. **A test pinning the input side.** A backend e2e test asserts content is stored and
+   returned *verbatim*. That is deliberate: sanitising on input would create a filter that can
+   be wrong or bypassed, and would also corrupt legitimate content containing `<` or `&`. The
+   test exists so that adding input sanitising later is a conscious decision rather than a
+   drive-by change.
+
+Verified end-to-end rather than assumed: a stored payload combining `<script>`, an
+`<img onerror=...>` and a `">` attribute-breakout in the SEO description produced zero live
+script elements, no live event-handler attribute, and fully escaped `<title>` and
+`<meta>` content.
+
+### 10b. Public data is never cached
+
+Both public fetches use `cache: 'no-store'`. Caching the catalogue would mean a product the
+manager has just unpublished could still be served to visitors — the same leak the draft rule
+exists to prevent, arriving by a different route. The cost is that `/` is a dynamic rather
+than a static route, which is the right trade-off for a content tool where correctness of
+visibility matters more than a cached first byte.
+
 ---
 
 ## 10. Repository layout — DECIDED: one repository at the root
