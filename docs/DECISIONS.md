@@ -189,6 +189,38 @@ because page JavaScript cannot read it. The cost is that cookies are attached au
 so CSRF must be considered — handled by `sameSite` on the cookie and by CORS restricted to the
 single frontend origin, with state-changing routes being non-simple JSON requests.
 
+### 4a. Implementation details settled in Phase 3
+
+- **Cookie lifetime is derived from the token.** `signSession()` signs the JWT, then decodes
+  its `exp` claim and uses that to set the cookie's `maxAge`. Setting the two independently
+  would let them drift, leaving either a cookie that outlives its token or a token the browser
+  discards early.
+- **The signing secret has no default.** `JWT_SECRET` missing throws with an explicit message.
+  A fallback default would mean a misconfigured deployment silently signs tokens with a value
+  an attacker could guess — failing loudly is safer than running insecurely.
+- **Session lifetime is `JWT_EXPIRES_IN_SECONDS`, a number, not a string like `1h`.** Two
+  reasons: `@nestjs/jwt` types the string form as the `ms` package's template-literal type,
+  which a value read from the environment cannot satisfy without a cast; and environment
+  variables are always strings, so the conversion has to be explicit and validated rather
+  than assumed. The value is range-checked on use.
+- **Login answers 200, not 201.** Nest defaults POST to 201 Created; authenticating creates
+  no resource.
+- **The token never appears in a response body** — only in the httpOnly cookie. Two e2e tests
+  assert this, one for the token and one for the password hash.
+- **User enumeration is mitigated in two places.** The error message is identical for an
+  unknown email and a wrong password, *and* bcrypt is run against a throwaway hash when no
+  user is found so the two paths take the same time. The message alone would not be enough:
+  measured, the unknown-email path would otherwise return in milliseconds against bcrypt's
+  ~300 ms. Verified by measurement — 0.30 s on both paths.
+- **No Passport.** A ~30-line guard calling `AuthService.verifySession()` covers everything
+  this assignment needs; Passport would add two dependencies and a strategy indirection for
+  no gain.
+
+**Not implemented, and why:** login rate limiting / brute-force protection. It would need
+another dependency (`@nestjs/throttler`) and the assignment does not ask for it. It is
+recorded as a known limitation in the README rather than silently omitted — a real deployment
+of this should have it.
+
 ---
 
 ## 5. API architecture — DECIDED: browser calls NestJS directly

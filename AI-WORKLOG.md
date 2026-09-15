@@ -338,6 +338,84 @@ correct behaviour and was respected.
 
 ---
 
+## 2026-09-15 — Entry 5: rejecting an AI-written test that passed for the wrong reason
+
+### Task
+
+Phase 3 added the login/logout/`me` endpoints and the guard, together with an e2e suite
+covering them. This entry is about the *tests*, since the assignment specifically asks how AI
+was used to write them and how their quality was judged.
+
+### AI contribution
+
+Claude Code generated the auth endpoints, the guard and a 17-case e2e suite. Two of its own
+outputs did not survive review — one caught by the model itself before the suite was ever
+run, and one caught only by the linter.
+
+**1. A logout test that asserted nothing.** The generated test ended:
+
+```ts
+// And a request carrying no cookie is refused.
+await request(app.getHttpServer()).get('/auth/me').expect(401);
+```
+
+This passes whether or not logout does anything at all — a request with no cookie was always
+going to be 401. Worse, it was framed as proving that "logout means the cookie no longer
+grants access", which for a **stateless JWT is simply not true**: logout clears the cookie in
+the browser, but a token already copied elsewhere stays valid until it expires. The test
+implied a security guarantee the implementation does not provide.
+
+**2. Type-unsafe assertions.** Several assertions read `response.body.message` and used
+`expect.any(String)`. supertest types `.body` as `any`, so those assertions were silently
+unchecked — the linter flagged them as `no-unsafe-member-access` / `no-unsafe-assignment`
+errors.
+
+### Candidate contribution
+
+I insisted the logout behaviour be described accurately rather than flatteringly, and that
+the known stateless-JWT limitation be *tested* rather than merely mentioned in a document
+where it could quietly drift out of date. I also rejected the option of silencing the
+`no-unsafe-*` lint errors for test files — the easy fix — on the grounds that untyped
+assertions are exactly where a test quietly stops testing anything.
+
+### Decision
+
+The single misleading logout test was replaced with three honest ones:
+
+1. logout returns a cookie cleared with a 1970 expiry (what the server actually does);
+2. a client that honours the clear instruction loses access;
+3. **`does NOT revoke an already-issued token (known stateless-JWT limitation)`** — which
+   asserts the real, weaker behaviour on purpose. If revocation is ever added, this test
+   fails and forces both the code and `docs/DECISIONS.md` §4 to be brought back into line.
+
+For the typing, a `bodyOf<T>()` helper plus declared `AdminBody` / `ErrorBody` interfaces
+replaced the `any` access, so the assertions are type-checked rather than suppressed.
+
+### Verification
+
+`npm run test:e2e` → **18/18 passing** (17 auth + 1 health). `npm run lint` → 0 errors
+(down from 6). `npm run build` → clean.
+
+The limitation test was confirmed against the running server by hand, not just in the suite:
+after `POST /auth/logout`, replaying the captured cookie against `/auth/me` returned **200**,
+exactly as the test asserts and as the documentation states.
+
+Two claims the code makes about itself were also checked by measurement rather than trusted:
+
+- The timing-attack mitigation: known-email-wrong-password took 0.348 / 0.299 / 0.298 s and
+  unknown-email took 0.306 / 0.305 / 0.320 s — indistinguishable, which is the point.
+- Test isolation: after the suite ran, `prisma/test.db` had been removed by teardown and
+  `prisma/dev.db` still contained only `admin@example.com`, proving the tests had not been
+  reading or writing development data.
+
+### Repository evidence
+
+`backend/test/auth.e2e-spec.ts` (the three logout tests, including the explicitly-named
+limitation test); `backend/test/create-test-app.ts` (`bodyOf`, `AdminBody`, `ErrorBody`);
+`backend/src/auth/`; `docs/DECISIONS.md` §4a.
+
+---
+
 ## Required concrete examples
 
 The assignment asks for 2–3 concrete examples of AI-generated solutions that were evaluated
@@ -359,12 +437,36 @@ requirement is already met with work that actually happened.*
 
 ## AI and automated testing
 
-To be completed as tests are written. This section will record which AI-written behaviour the
-tests actually cover, what those tests genuinely prove, what still needed manual checking, and
-any AI-generated test that was changed or rejected — for example a test that asserts an
-implementation detail rather than a requirement, or one that passes for the wrong reason.
-
 Standing rule for this project: a test is never weakened or deleted to make the suite green.
+
+**What the tests currently cover.** The 18 e2e cases exercise AI-written authentication code
+end-to-end over real HTTP against a real (throwaway) SQLite database: credential checking,
+cookie flags, the guard on a protected route, tampered/foreign/garbage tokens, the validation
+pipe's rejection of malformed and unknown fields, and logout.
+
+**What they genuinely prove — and what they do not.** They prove the server's *observable*
+behaviour: that `/auth/me` is unreachable without a valid cookie, that failed logins are
+indistinguishable from unknown accounts in the response, and that unknown payload properties
+are rejected rather than ignored. They do **not** prove the session cannot be stolen, and
+they deliberately do not claim logout revokes a token — one test asserts the opposite, because
+that is what a stateless JWT actually does.
+
+**Where tests caught AI code, and where they did not.** Two AI mistakes in this project were
+invisible to the test suite and were caught only by running things:
+
+- the missing `class-validator` package (Entry 3) — lint, build and all tests passed while the
+  application could not start, because none of them call `app.listen()`;
+- the `deepmerge-ts` advisory (Entry 4) — no test can see a dependency vulnerability.
+
+Two others were caught by tooling rather than by tests: the `@nestjs/jwt` `expiresIn` typing
+and the `isolatedModules` decorator-import rule, both surfaced by `tsc`.
+
+**AI-generated tests that were changed or rejected.** One was rejected outright: a logout test
+that passed regardless of whether logout worked, and that implied a revocation guarantee the
+implementation does not offer (Entry 5). Several others had assertions that read supertest's
+`any`-typed body and were therefore unchecked; those were retyped rather than lint-suppressed.
+The lesson recorded for the remaining phases is that a green suite says nothing on its own —
+each test has to be read to see whether it could ever fail.
 
 ---
 

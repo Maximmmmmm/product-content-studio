@@ -168,23 +168,72 @@ Proposed commit: `feat: add database schema, migrations and seed data`
 
 ## Phase 3 — Authentication
 
-Status: NOT STARTED
+Status: **COMPLETE**
 
-Implement:
-- `POST /auth/login` — bcrypt compare, sign JWT, set httpOnly cookie
-  (`httpOnly`, `sameSite`, `secure` in production, explicit expiry).
-- `POST /auth/logout` — clear the cookie.
-- `GET /auth/me` — current admin, for the admin UI.
-- `JwtCookieGuard` applied to every admin route.
-- Generic error message for both unknown user and wrong password.
-- No registration, no password recovery, no roles.
+Implemented:
+- `POST /auth/login` — bcrypt compare, signs a JWT, sets it as an httpOnly cookie
+  (`httpOnly`, `sameSite=lax`, `secure` in production, `path=/`). Returns 200, not Nest's
+  default 201, because logging in creates no resource. The token is **never** in the body.
+- `POST /auth/logout` — clears the cookie with the same attributes it was set with.
+- `GET /auth/me` — the current admin, for the admin UI.
+- `JwtCookieGuard` — reads the cookie, verifies the token, attaches the admin to the request.
+  Applied to `/auth/me` now and to every admin route in Phase 4.
+- A single generic message (`Invalid email or password.`) for both an unknown email and a
+  wrong password.
+- A **timing-attack mitigation**: when no user is found, bcrypt is still run against a
+  throwaway hash, so both paths cost the same. Without it an unknown email returns in
+  milliseconds while a known one takes the ~300 ms bcrypt needs, which alone reveals which
+  accounts exist.
+- The cookie's `maxAge` is derived from the signed token's own `exp` claim, so the cookie and
+  the token cannot expire at different times.
+- `JWT_SECRET` has **no default** — a missing value throws a clear error rather than silently
+  signing with a guessable fallback.
+- Session lifetime moved to `JWT_EXPIRES_IN_SECONDS` (a number) rather than a string like
+  `1h`: `@nestjs/jwt` types the string form as the `ms` package's template-literal type, which
+  a value read from the environment cannot satisfy without a cast, and environment variables
+  are always strings so the conversion must be explicit and validated.
+- No registration, no password recovery, no roles — all out of scope.
 
-Verification (e2e):
-- Valid credentials → 200 and a `Set-Cookie` with `HttpOnly`.
-- Wrong password → 401, same message as unknown user.
-- Admin route without a cookie → 401.
-- Admin route with a tampered/expired token → 401.
-- After logout, the previously working request → 401.
+Supporting change — **shared app configuration**. `configureApp()` was extracted to
+`src/app-setup.ts` and is now called by both `main.ts` and the e2e tests. Previously the e2e
+suite built the app through `TestingModule`, which never runs `main.ts`, so it had no
+cookie-parser and no global `ValidationPipe` — meaning the validation tests would have passed
+against a configuration that never ships.
+
+Supporting change — **isolated test database**. `test/global-setup.ts` creates
+`prisma/test.db`, applies the real migrations, seeds it with a dedicated e2e administrator,
+and deletes it afterwards. `vitest.config.e2e.ts` points `DATABASE_URL` at it and disables
+file parallelism, since the specs share one SQLite file. Tests therefore never touch
+`prisma/dev.db`, and need no external service.
+
+Verification (all actually run):
+- **e2e: 18/18 passing** (17 auth + 1 health), covering: valid login sets an `HttpOnly`,
+  `SameSite=Lax` cookie; the token never appears in the body; the password hash never appears
+  in the body; wrong password → 401; wrong password and unknown email return an **identical**
+  message; no cookie is set on a failed login; malformed email → 400; missing password → 400;
+  an unknown property in the payload → 400; `/auth/me` with a valid cookie → 200; with no
+  cookie → 401; with a tampered token → 401; with a token signed by a different secret → 401;
+  with a garbage value → 401; logout returns a cookie cleared with a 1970 expiry.
+- Test isolation confirmed: `prisma/test.db` was created, used and removed by teardown, and
+  `prisma/dev.db` still contained only `admin@example.com` afterwards.
+- `npm run lint` → 0 errors; `npm run build` → clean; `npm test` → 1/1.
+- Manual curl walkthrough against the running app: login returned
+  `Set-Cookie: session=…; Max-Age=3599; HttpOnly; SameSite=Lax` with no token in the body;
+  `/auth/me` with the cookie → 200, without → 401; wrong password and unknown email returned
+  byte-identical bodies; `{"isAdmin":true}` in the login payload → 400
+  `property isAdmin should not exist`; logout returned
+  `session=; Expires=Thu, 01 Jan 1970 …`.
+- **Timing mitigation measured, not assumed**: known-email-wrong-password took
+  0.348 / 0.299 / 0.298 s and unknown-email took 0.306 / 0.305 / 0.320 s — indistinguishable.
+
+Known limitation (documented, not hidden): logout clears the cookie but cannot revoke an
+already-issued stateless token, which stays valid until it expires. There is an explicit e2e
+test asserting this real behaviour, so that adding revocation later will fail the test and
+force the documentation to be updated. See `docs/DECISIONS.md` §4.
+
+Also not implemented: login rate limiting / brute-force protection. The assignment does not
+require it and it would mean another dependency; recorded here as a known limitation rather
+than silently omitted.
 
 Proposed commit: `feat: add admin authentication with httpOnly JWT cookie`
 
