@@ -302,25 +302,74 @@ Proposed commit: `feat: add product REST API with server-side validation`
 
 ## Phase 5 — Admin UI
 
-Status: NOT STARTED
+Status: **COMPLETE**
 
-Implement:
-- Login page; redirect to the product list on success; clear error on failure.
-- Product list showing name and status, linking to the editor.
-- Editor: name and characteristics read-only; description, SEO fields and status editable.
-- Explicit Save button — nothing is persisted without it.
-- Distinct idle / saving / saved / error states.
-- A failed save keeps every character the user typed and is never presented as success.
-- Character counters against the shared limit constants.
-- Responsive layout for desktop and mobile.
-- Logout.
+Implemented:
+- `lib/api.ts` — a typed API client. Every request sends `credentials: 'include'` so the
+  httpOnly cookie travels with it; the token is never read by client code. `ApiError` carries
+  the HTTP status so callers can distinguish 401 from 400, and a failed `fetch` (API not
+  running) is turned into a readable message rather than an unhandled rejection.
+- `LIMITS` mirrors the server's three limits for live character counters. Documented in the
+  file as a convenience only — the server re-validates every field on every save.
+- Login page (`/admin/login`): submits, redirects to the product list, and on failure shows
+  the error **while leaving the typed credentials in place** so a typo can be corrected.
+- Product list (`/admin/products`): name + status badge per row, linking to the editor.
+- Editor (`/admin/products/[id]`): name and characteristics rendered as read-only text (no
+  input element exists for them); description, SEO title, SEO description and status editable.
+- Explicit **Save changes** button — disabled until something actually changes, and disabled
+  while a field is empty or over its limit.
+- Four distinct save states: idle, saving, saved, error. "Saved" appears **only** after the
+  server confirms the write, and is cleared as soon as editing resumes so it can never sit
+  next to unsaved edits. An "Unsaved changes" marker shows when the form is dirty.
+- A failed save changes **only** `saveState` — nothing in the error path touches the form
+  values, which is what keeps the user's edits on screen.
+- A 401 during load or save redirects to the login page.
+- Character counters per field, turning red past the limit.
+- Responsive: mobile-first single column, `flex-wrap` on header/action rows, `sm:` breakpoints
+  for padding, and `max-w-*` containers.
+- Sign out in the admin header, which navigates to the login page even if the logout request
+  itself fails — the server-side guard is what actually protects the data.
 
-Verification:
-- Manual: edit → save → reload → the change is still there.
-- Manual: with the backend stopped, save → error shown, input preserved.
-- React Testing Library: failed save preserves input and shows an error.
-- Manual: usable at mobile width.
-- Manual: admin pages are unusable without a valid session.
+Supporting change — **frontend test infrastructure**: Vitest 5 + React Testing Library +
+jsdom, with `vitest.config.mts` (the `.mts` extension avoids Vite's CJS config-loader warning
+and cut the run from 27 s to 5 s) and a setup file that unmounts between tests.
+
+Also updated `@types/node` from `^20` to `^24` in the frontend: Vitest 5 requires
+`^22 || >=24`, and `^24` matches both the actual Node runtime (24.21.0) and the backend.
+
+Verification (all actually run):
+- **Frontend tests: 10/10 passing**, covering: read-only facts render as text with no input
+  holding the name; typing alone never calls the API; Save disabled until dirty; **a failed
+  save keeps the typed value character-for-character, shows the error, and shows no "Saved"**;
+  the same when the server is unreachable; success reported only after the server confirms,
+  with the exact payload asserted; a stale "Saved" cleared once editing resumes; empty and
+  over-length fields block saving; a 401 redirects to login.
+- **The critical behaviour was mutation-tested**: adding `setValues(valuesOf(product))` to the
+  error path (i.e. making a failed save wipe the form) failed exactly the two
+  data-preservation tests and nothing else. Reverted, suite green again.
+- `npm run lint` → clean; `npm run typecheck` → clean; `npm run format:check` → clean;
+  `npm run build` → succeeded, all five routes compiled.
+- Both servers started together: backend `/health` → 200, `/admin/login` → 200,
+  `/admin/products` → 200.
+- The login page's server HTML contains the email/password fields; the admin list page's
+  server HTML contains **no product data at all** (it loads client-side, behind the API
+  guard), so nothing leaks to an unauthenticated viewer of the page source.
+- The built client bundle was searched for `ChangeMe123`, the JWT secret and `SEED_ADMIN` —
+  **no matches**. The only injected value is `http://localhost:3001`, which is intentionally
+  public.
+
+A lint rule worth recording: `react-hooks/set-state-in-effect` rejected the initial
+`useCallback` + `useEffect` data-loading pattern because it called `setState` synchronously
+inside the effect. Both pages were restructured to fetch inside the effect with a `cancelled`
+guard and a `reloadToken` for the retry button — which also fixed a real latent bug, since the
+original had no protection against a slow response resolving after unmount.
+
+**Known verification gap (honest limitation):** there is no automated browser click-through of
+login → edit → save, and the responsive layout has not been checked in a real browser at
+mobile width. Playwright was deliberately rejected in Phase 0 as disproportionate to the time
+budget. The editor's interactive behaviour is covered by the React Testing Library tests
+above, and the API it calls is covered by the 55 backend e2e tests, but "it looks right in a
+browser" is asserted by neither. This is recorded rather than glossed over.
 
 Proposed commit: `feat: add admin product list and editor`
 

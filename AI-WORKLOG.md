@@ -489,6 +489,83 @@ republishing restored it. Development data was restored to its seeded values aft
 
 ---
 
+## 2026-09-15 — Entry 7: proving the most important UI test actually guards the behaviour
+
+### Task
+
+Phase 5 built the admin UI. Its hardest requirement is not visual: *"невдале збереження не
+стирає введені правки та не показується як успішне"* — a failed save must neither erase the
+user's edits nor be presented as success. That is easy to write code for, easy to write a
+passing test for, and easy to break later without noticing.
+
+### AI contribution
+
+Claude Code implemented the editor with a deliberate state split — `values` (on screen),
+`savedValues` (server-confirmed), `saveState` — under one rule: only a successful response may
+write to `values` or `savedValues`. The catch block touches `saveState` and nothing else.
+
+It wrote ten React Testing Library tests, then — rather than reporting the green run — checked
+that the important ones could actually fail. It added a single line to the error path:
+
+```ts
+setValues(valuesOf(product));   // mutation: make a failed save wipe the form
+```
+
+Result: exactly two tests failed — `keeps the typed input and shows an error when saving
+fails` and `keeps the typed input when the server is unreachable` — and the other eight still
+passed. That is the evidence those two tests are what hold the requirement in place, and that
+they are specific rather than incidentally coupled to everything else. The line was reverted
+and the suite returned to 10/10.
+
+### Candidate contribution
+
+I required that the requirement be pinned by a test whose failure mode had been demonstrated,
+not merely covered by a test that happened to be green — the same standard applied to the
+backend boundary limits in Entry 6. I also required the verification gap to be stated plainly
+(see below) instead of letting "10/10 passing" imply more coverage than exists.
+
+### Decision
+
+The state split and its single rule are documented in `docs/DECISIONS.md` §8a so the reasoning
+survives without the tests having to be read.
+
+Separately, ESLint's `react-hooks/set-state-in-effect` rejected the first data-loading
+pattern (`useCallback` + `useEffect` calling `setState` synchronously). Rather than disabling
+the rule, both admin pages were restructured to fetch inside the effect with a `cancelled`
+guard and a `reloadToken` for retry. That removed a real latent bug the tests had not covered:
+a slow response resolving after the component unmounted would have set state on an unmounted
+component.
+
+### Verification
+
+```
+npm test          10/10 passing
+mutation check    error path wiping the form -> exactly 2 failures, then reverted
+npm run lint      clean   (after the set-state-in-effect restructure)
+npm run typecheck clean
+npm run build     clean, 5 routes
+```
+
+Checked against both servers actually running: `/admin/login` and `/admin/products` served
+200; the login page's HTML contains the form fields; the admin list page's HTML contains **no
+product data at all**, since it loads client-side behind the API guard. The built client
+bundle was searched for the admin password, the JWT secret and `SEED_ADMIN` — no matches; the
+only injected value is the API URL, which is intentionally public.
+
+**Stated limitation:** there is no automated browser click-through of login → edit → save, and
+the responsive layout has not been verified in a real browser at mobile width. Playwright was
+rejected in Phase 0 as disproportionate to the time budget. The editor's behaviour is covered
+by the tests above and its API by the backend e2e suite, but "it looks correct in a browser"
+is asserted by neither, and is not claimed.
+
+### Repository evidence
+
+`frontend/app/admin/products/[id]/product-editor.tsx` (the error path that touches only
+`saveState`); `frontend/test/product-editor.test.tsx`; `frontend/lib/api.ts`;
+`docs/DECISIONS.md` §8a–8b.
+
+---
+
 ## Required concrete examples
 
 The assignment asks for 2–3 concrete examples of AI-generated solutions that were evaluated

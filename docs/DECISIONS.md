@@ -348,6 +348,31 @@ pages and through fetches for admin pages.
 **Why no library:** there is one form and one list. A global store would add indirection with
 no benefit, and the assignment explicitly warns against unnecessary abstraction.
 
+### 8a. How "a failed save must not erase edits" is actually guaranteed
+
+The editor holds three pieces of state: `values` (what is on screen), `savedValues` (what the
+server last confirmed), and `saveState` (idle / saving / saved / error).
+
+The guarantee comes from one rule: **only a successful response may write to `values` or
+`savedValues`.** The catch block sets `saveState` and nothing else, so a failure cannot
+disturb what the user typed. "Unsaved changes" is derived by comparing the two, and the Save
+button is enabled only when they differ and no field breaks a limit.
+
+`saveState` is reset to idle on every keystroke, so a "Saved" message can never remain on
+screen next to edits that have not been saved — which would be exactly the "shown as
+successful" failure the assignment forbids.
+
+This is verified rather than asserted: a mutation adding `setValues(valuesOf(product))` to the
+error path failed precisely the two tests that guard it. See `AI-WORKLOG.md` entry 7.
+
+### 8b. Data loading in client components
+
+`react-hooks/set-state-in-effect` (part of eslint-config-next) rejects calling `setState`
+synchronously inside an effect. The fetch therefore happens *inside* the effect, with a
+`cancelled` flag so a slow response cannot set state after unmount, and a `reloadToken`
+counter that the "Try again" button increments to re-run it. The rule pushed the code toward
+a pattern that also fixed a real latent unmount bug.
+
 ---
 
 ## 9. Security and content handling — DECIDED
