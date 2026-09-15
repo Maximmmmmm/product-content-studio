@@ -221,6 +221,35 @@ another dependency (`@nestjs/throttler`) and the assignment does not ask for it.
 recorded as a known limitation in the README rather than silently omitted — a real deployment
 of this should have it.
 
+### 4b. CSRF, and why there is no CSRF token
+
+Cookie authentication raises CSRF, because browsers attach cookies automatically. There is no
+CSRF token here, and that is a decision rather than an oversight — two independent mechanisms
+already block the attack:
+
+1. **`SameSite=Lax`** means the session cookie is not sent on cross-site `POST`/`PATCH`
+   requests at all. It rides along only on top-level GET navigations, and every state-changing
+   route in this API is a POST or PATCH.
+2. **CORS restricted to one origin.** Every state-changing request carries
+   `Content-Type: application/json`, which makes it a "non-simple" request, so the browser
+   must preflight it. Verified by sending an `OPTIONS` preflight for a `PATCH` from
+   `http://evil.example.com`: the response's `Access-Control-Allow-Origin` is always the
+   configured frontend origin, so a hostile origin never receives a match and the browser
+   refuses to send the real request.
+
+A CSRF token would be a third layer guarding against nothing the first two let through, at the
+cost of extra state on both sides. If the cookie ever needed `SameSite=None` — a genuinely
+cross-domain deployment — that calculation changes and a token would be required.
+
+### 4c. Why a development password lives in `.env.example`
+
+The assignment requires both an example configuration *without secrets* and a README that is
+sufficient for a reviewer to log in. `.env.example` resolves this with a clearly-labelled
+development default (`SEED_ADMIN_PASSWORD=ChangeMe123!`) that the reviewer copies to `.env`
+before seeding. It is not a credential for anything that exists — the account is created
+locally, on the reviewer's own machine, from whatever value their `.env` holds. No real secret
+is committed, and `backend/.env` is git-ignored.
+
 ---
 
 ## 5. API architecture — DECIDED: browser calls NestJS directly
@@ -387,7 +416,13 @@ a pattern that also fixed a real latent unmount bug.
 | S6 | No XSS from product content | Content is stored as plain text and rendered as React text nodes; `dangerouslySetInnerHTML` is not used anywhere; SEO fields go through Next's `generateMetadata`, which escapes them |
 | S7 | Hardened cookie | `httpOnly`, `sameSite`, `secure` in production, explicit expiry; logout clears it |
 | S8 | CORS restricted | Enabled for the frontend origin only, with credentials |
-| S9 | No user enumeration | The same generic message for an unknown user and a wrong password |
+| S9 | No user enumeration | The same generic message for an unknown user and a wrong password, plus a matching-cost bcrypt comparison so the two take the same time |
+| S10 | No stack advertising | `X-Powered-By` disabled in `configureApp()` — found during the Phase 7 audit and pinned by a regression test |
+
+Every row above was verified against the **running** system in Phase 7, not merely read
+against the code. See `docs/IMPLEMENTATION-PLAN.md` Phase 7 for the results table and the
+additional probing: SQL injection payloads, oversized bodies and cookies, and what a genuine
+500 response exposes.
 
 **How user content is stored and rendered:** stored exactly as typed, with no HTML sanitisation
 on the way in and no HTML interpretation on the way out. React escapes text nodes by default,

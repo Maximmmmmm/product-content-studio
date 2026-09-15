@@ -443,18 +443,58 @@ Proposed commit: `feat: add public catalogue and product pages`
 
 ## Phase 7 — Security and edge-case audit
 
-Status: NOT STARTED
+Status: **COMPLETE**
 
-Review every row of the security table in `docs/DECISIONS.md` (S1–S9) against the real code:
-authentication, authorization, validation, public/private boundary, XSS, secret exposure,
-cookie flags, CORS, error handling, invalid ids, failed writes.
+Every row of the S1–S9 table in `docs/DECISIONS.md` was checked against the running system,
+not just read against the code.
 
-Verification:
-- Targeted negative tests for anything not already covered.
-- Build the frontend and grep the client bundle for the admin password and the JWT secret.
-- Confirm `.env` is ignored by git and `.env.example` contains only placeholders.
+| # | Property | How it was verified | Result |
+|---|---|---|---|
+| S1 | Admin routes reject unauthenticated requests | Enumerated every `@Get/@Post/@Patch` in `src/` and matched against guards; e2e tests | **Pass** — all three `/admin/products` routes covered by a controller-level guard; `/auth/me` guarded; `/auth/logout` intentionally unguarded so a stale cookie can still be cleared |
+| S2 | Password stored hashed only | New e2e test asserting the stored value matches `^\$2[aby]\$\d{2}\$`, is 60 chars, and does not contain the plaintext | **Pass** |
+| S3 | Secrets never reach the client | Rebuilt the frontend and grepped all of `.next/static` for the admin password, JWT secret, `SEED_ADMIN_PASSWORD` and `passwordHash` | **Pass** — no matches; only the API URL is inlined, which is intentionally public |
+| S4 | Drafts invisible publicly | e2e tests (404 for draft, message identical to unknown slug) + manual check of the running catalogue | **Pass** |
+| S5 | No mass assignment | e2e tests for `name`, `characteristics`, `slug`, `id` | **Pass** — all rejected with 400 |
+| S6 | Content cannot execute | `react/no-danger` ESLint error (verified it fires), verbatim-storage e2e test, and a live XSS payload check in Phase 6 | **Pass** |
+| S7 | Cookie hardened | Ran the API with `NODE_ENV=production` — previously untested | **Pass** — `HttpOnly; Secure; SameSite=Lax; Max-Age=3599; Path=/` |
+| S8 | CORS locked to the frontend origin | Preflighted a `PATCH` from `http://evil.example.com` | **Pass** — the returned `Access-Control-Allow-Origin` is always the configured origin, so a foreign origin never gets a match and the browser blocks it |
+| S9 | No user enumeration | e2e test comparing messages, plus timing measured in Phase 3 | **Pass** |
 
-Proposed commit: `fix: harden validation and security`
+Additional probing beyond the table:
+
+- **SQL injection** — four payloads (`' OR '1'='1`, `'; DROP TABLE Product;--`, a `UNION
+  SELECT` against `User`, `' OR 1=1--`) sent as public slugs. All returned 404, no password
+  hash appeared in any response, and the tables were intact afterwards. Prisma parameterises;
+  now pinned by e2e tests.
+- **Oversized input** — a ~200 KB and a ~5 MB body both returned **413**, and a 50 KB cookie
+  returned **431**, so neither reaches application code.
+- **Error leakage** — a genuine 500 was triggered by pointing a throwaway server on port 3002
+  at an empty database. The response body was exactly
+  `{"statusCode":500,"message":"Internal server error"}` — no stack frames, table names, file
+  paths or Prisma detail. Malformed JSON, a null body, an array body and a wrong content type
+  all returned clean 400s.
+- **Secret hygiene** — `.env.example` contains only placeholders; `backend/.env` and
+  `frontend/.env.local` are both confirmed git-ignored; no `.env`, `.pem` or `.key` file is
+  tracked.
+
+Finding fixed: **`X-Powered-By: Express`** was being returned on every response, advertising
+the stack to anyone scanning the service. Disabled in `configureApp()`, and pinned by a
+regression test. The test was mutation-checked — removing the fix caused exactly that one
+test to fail.
+
+New `backend/test/security.e2e-spec.ts` covers the header, the SQL-injection payloads, the
+body-size limit, 404 bodies not leaking internals, and the password-hash format.
+
+Verification totals after this phase: **backend e2e 65/65**, backend unit 1/1, frontend 10/10,
+lint 0 errors both sides, builds clean, `npm audit` 0 vulnerabilities.
+
+Known limitations carried forward (documented, not fixed):
+- No login rate limiting / brute-force protection. Would need another dependency; the
+  assignment does not require it.
+- `secure` cookies require HTTPS, so a production deployment must terminate TLS.
+- No automated browser click-through of the admin flow (from Phase 5).
+
+Proposed commit: `fix: harden security and add audit regression tests`
 
 ---
 

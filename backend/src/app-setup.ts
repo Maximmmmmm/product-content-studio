@@ -1,5 +1,6 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 
 /**
@@ -13,6 +14,14 @@ import cookieParser from 'cookie-parser';
  */
 export function configureApp(app: INestApplication): INestApplication {
   const config = app.get(ConfigService);
+
+  // Express advertises itself with `X-Powered-By: Express` by default. It
+  // serves no purpose and tells anyone scanning the service exactly which
+  // stack to look up known vulnerabilities for.
+  (app as NestExpressApplication)
+    .getHttpAdapter()
+    .getInstance()
+    .disable?.('x-powered-by');
 
   // Required so the auth guard can read the session cookie.
   app.use(cookieParser());

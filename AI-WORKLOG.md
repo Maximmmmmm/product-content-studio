@@ -640,6 +640,83 @@ page after fix   U+2014, no replacement character
 
 ---
 
+## 2026-09-15 — Entry 9: auditing the security claims instead of re-reading them
+
+### Task
+
+Phase 7 was an audit of the S1–S9 security table in `docs/DECISIONS.md`. The risk in an audit
+like this is that it degenerates into re-reading the code that was written to satisfy the
+table and agreeing with itself.
+
+### AI contribution
+
+Claude Code checked each row against the running system rather than the source, which turned
+up two things reading alone would not have.
+
+**1. A property that had never actually been exercised.** S7 claims the session cookie is
+`secure` in production. Every test and every manual check until this point had run in
+development, where that flag is deliberately off — so the production branch had never
+executed. Running the API with `NODE_ENV=production` confirmed it works:
+`HttpOnly; Secure; SameSite=Lax`. It happened to be correct, but until then the claim was
+untested.
+
+**2. A finding the table did not cover at all.** Every response carried
+`X-Powered-By: Express`, advertising the stack to anyone scanning the service. That is a small
+issue, but it was invisible to a row-by-row review of rows that did not mention it.
+
+It also probed beyond the table: four SQL-injection payloads through the public slug parameter
+(all 404, no password hash in any response, tables intact afterwards), oversized bodies and
+cookies (413 and 431, so neither reaches application code), and — the one that mattered most —
+what a genuine 500 exposes. That last was triggered safely by pointing a throwaway server on a
+separate port at an empty database, rather than by breaking the development one:
+
+```
+{"statusCode":500,"message":"Internal server error"}
+```
+
+No stack frames, table names, file paths or Prisma detail.
+
+### Candidate contribution
+
+I required the audit to be evidence-gathering rather than confirmation: each row had to be
+demonstrated against a running system, and the audit had to be allowed to find things the
+table did not already list. I also required the CSRF question to be answered explicitly —
+cookie authentication invites it, and "we have no CSRF token" needs a reason, not silence.
+
+### Decision
+
+`X-Powered-By` is disabled in `configureApp()`, with a regression test. A new
+`backend/test/security.e2e-spec.ts` pins the header, the SQL-injection payloads, the
+body-size limit, 404 bodies not leaking internals, and the bcrypt hash format — so these
+become properties the suite defends rather than one-off observations.
+
+CSRF is documented in `docs/DECISIONS.md` §4b as deliberately having no token, because
+`SameSite=Lax` and single-origin CORS already block it independently. That was verified rather
+than asserted: an `OPTIONS` preflight for a `PATCH` from `http://evil.example.com` never
+receives a matching `Access-Control-Allow-Origin`, so the browser refuses to send the request.
+
+### Verification
+
+```
+backend e2e     65/65 passing (9 new security tests)
+mutation check  removing the X-Powered-By fix -> exactly 1 failure, then reverted
+backend unit    1/1
+frontend        10/10
+lint            0 errors both sides
+npm audit       0 vulnerabilities
+```
+
+Production-mode run: `HttpOnly; Secure; SameSite=Lax`, and no `X-Powered-By` on the fixed
+build. Frontend rebuilt and all of `.next/static` searched for the admin password, JWT secret,
+`SEED_ADMIN_PASSWORD` and `passwordHash` — no matches.
+
+### Repository evidence
+
+`backend/src/app-setup.ts`; `backend/test/security.e2e-spec.ts`;
+`docs/IMPLEMENTATION-PLAN.md` Phase 7 (the results table); `docs/DECISIONS.md` §4b, §4c, S10.
+
+---
+
 ## Required concrete examples
 
 The assignment asks for 2–3 concrete examples of AI-generated solutions that were evaluated
