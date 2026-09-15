@@ -14,6 +14,10 @@ afterwards.
 
 ## AI tools
 
+> A summary of the whole engagement is at the end of this file
+> ([Final AI usage summary](#final-ai-usage-summary)). The numbered entries below are the
+> concrete examples, recorded as the work happened.
+
 ### Claude Code
 
 **Model:** Claude Opus 5 (`claude-opus-5`), running in the Claude Code VS Code extension.
@@ -789,20 +793,79 @@ each test has to be read to see whether it could ever fail.
 
 ## Final AI usage summary
 
-*To be completed at the end of the assignment.*
+**Tools/models actually used:** Claude Code with Claude Opus 5 (`claude-opus-5`), in the VS
+Code extension. No other AI tool was used.
 
-Tools/models actually used:
+**Main contributions from AI.** Repository and requirements analysis; the phase plan; almost
+all of the implementation code (NestJS modules, Prisma schema and seed, the React admin UI and
+public pages, all 76 tests); and — as important — the verification work: running the servers,
+probing the API, mutation-testing its own tests, and auditing the security table against a
+running system.
 
-Main contributions from AI:
+**Main contributions from me.** Every material decision: SQLite + Prisma, JWT in an httpOnly
+cookie, the browser↔API topology, the testing strategy, and the single-repository layout. Each
+was presented with alternatives and trade-offs before any code was written, and I chose.
 
-Main contributions from me:
+More substantively, I set the standard the work was held to, which is what produced most of
+the entries above:
 
-Examples where AI output was changed or rejected:
+- No material technology decision without alternatives presented first.
+- Nothing reported as working without being run.
+- A green test suite is a claim, not evidence — the important tests must be shown to fail.
+- Known limitations get documented and, where possible, pinned by a test, rather than glossed.
+- Lint errors get fixed, not suppressed.
 
-How correctness was verified:
+I also rejected specific AI proposals on their merits — the Prisma 7 upgrade, a misleading
+logout test, and lint-suppression of untyped assertions — and required an inaccurate earlier
+claim of mine to be corrected in writing rather than quietly fixed.
 
-What I learned / what I would improve:
+**Examples where AI output was changed or rejected.** Entries 2–9 above. The clearest four:
 
-Actual development time:
+1. **A test that could not fail** (Entry 5). A logout test asserted that an unauthenticated
+   request returns 401 — true regardless of whether logout does anything — while implying a
+   token-revocation guarantee the stateless design does not provide. Replaced with three
+   tests, one of which deliberately asserts the weaker real behaviour.
+2. **An upgrade that would have made things worse** (Entry 4). Prisma 7 was proposed as "newer
+   and therefore safer". Measured: it pins the *same* vulnerable `deepmerge-ts`, adds a
+   vulnerable `mysql2` this project never loads (3 high → 4 high), and needs a native module
+   for SQLite. Rejected; the actual advisory was fixed with a targeted npm `override` instead.
+3. **A verification that proved nothing** (Entry 6). A restart-persistence check appeared to
+   pass, but the background stop had left the old process alive, so the "restarted" server had
+   failed to start and the original answered the request. Redone with the absence of a
+   listener proven first.
+4. **Lint-suppression as the easy fix** (Entry 5). Untyped supertest assertions triggered
+   `no-unsafe-*` errors. Suppressing the rule for test files was rejected — untyped assertions
+   are exactly where a test quietly stops testing — and replaced with a typed `bodyOf<T>()`
+   helper.
 
-Known limitations or unfinished work:
+**How correctness was verified.** 76 automated tests (65 backend e2e, 1 backend unit, 10
+frontend component), plus lint, typecheck, build and `npm audit` on both applications. Beyond
+that: running the system and probing it — production-mode cookie flags, SQL-injection payloads,
+oversized bodies and cookies, what a 500 exposes, a live XSS payload rendered end-to-end, and a
+genuine process restart. Finally a **clean-room run**: `node_modules`, build output and the
+database were deleted and the README followed verbatim from scratch.
+
+**What I learned / would improve.** The recurring lesson is that green is not the same as
+verified. Three real defects in this project were invisible to a passing test suite — a missing
+runtime package that let lint, build and all tests pass while the app could not start; a
+dependency advisory no test can see; and a `curl` command that silently corrupted stored UTF-8
+while reporting success. Each was caught only by running the real thing and then checking the
+result rather than the exit code.
+
+The habit that paid off most was mutation testing: deliberately breaking the code a test
+guards, to confirm the test goes red. It took minutes and converted "the suite passes" into
+"these specific tests hold these specific properties".
+
+What I would improve with more time: add a Playwright click-through so the admin flow has
+browser-level proof; add login rate limiting; and move `status` to a database-level constraint
+(which in practice means PostgreSQL).
+
+**Actual development time:** _to be completed by the candidate before submission_ — see
+`README.md`. The planned estimate was approximately 8 hours across the eight phases.
+
+**Known limitations or unfinished work.** Listed in full in `README.md`. In short: logout does
+not revoke an already-issued token; there is no login rate limiting; there is no automated
+browser test and the responsive layout has not been verified in a real browser; SQLite gives no
+database-level enum for `status`; `Secure` cookies require TLS in production. All bonus items
+(LLM generation, Shopify, Figma, Docker/CI) are deliberately out of scope. The mandatory scope
+is complete.
