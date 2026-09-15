@@ -241,26 +241,60 @@ Proposed commit: `feat: add admin authentication with httpOnly JWT cookie`
 
 ## Phase 4 — Product API and server-side validation
 
-Status: NOT STARTED
+Status: **COMPLETE**
 
-Implement:
+Implemented:
 - `GET /admin/products` — id, name, status (guarded).
-- `GET /admin/products/:id` — full record (guarded).
+- `GET /admin/products/:id` — full record with `characteristics` parsed from JSON text into
+  a real array (guarded).
 - `PATCH /admin/products/:id` — description, seoTitle, seoDescription, status only (guarded).
-- `GET /products` — published only.
+- `GET /products` — published only; returns slug, name, seoDescription.
 - `GET /products/:slug` — published only, otherwise 404.
-- `UpdateProductDto` with the assignment's limits: description non-empty ≤ 1000,
-  seoTitle non-empty ≤ 60, seoDescription non-empty ≤ 160, status in `draft|published`.
-- `whitelist` + `forbidNonWhitelisted` so `name`, `characteristics` and `id` cannot be
-  modified through the API (mass-assignment protection).
-- Public queries filter `status = 'published'` in the database query itself.
+- `UpdateProductDto` with the assignment's limits: description non-empty ≤ 1000, seoTitle
+  non-empty ≤ 60, seoDescription non-empty ≤ 160, status in `draft|published`. All four
+  fields are required, so every save re-validates everything.
+- Values are **trimmed before validation**, so `"   "` fails the non-empty check and trailing
+  whitespace does not count toward a limit. The validated value is exactly what gets stored.
+- `whitelist` + `forbidNonWhitelisted` (from Phase 1) mean `name`, `characteristics`, `slug`
+  and `id` are rejected with 400 rather than silently ignored.
+- The guard is applied at **controller level** on `AdminProductsController`, so a future
+  endpoint cannot be added unprotected by forgetting a decorator.
+- Public and admin routes live in **separate controllers** with separate response shapes, so
+  the public routes cannot inherit an admin response or lose their published-only filter.
+- Every Prisma query uses an explicit `select`, so a column added later cannot leak into a
+  public response by default.
+- The published filter is part of the database query, not a JavaScript filter applied after
+  loading — a draft is never read from the database by a public request.
+- `src/products/product-status.ts` is the single source of truth for the two status values,
+  since SQLite cannot express them as a Prisma enum.
 
-Verification (e2e):
-- Each boundary: empty, 1000 ok / 1001 rejected, 60 ok / 61 rejected, 160 ok / 161 rejected.
-- A rejected update leaves the stored row byte-for-byte unchanged.
-- An attempt to change `name` via `PATCH` is rejected, not silently ignored.
-- `GET /products` never contains a draft; `GET /products/:draftSlug` → 404 (not 403).
-- A successful update persists and changes public visibility when the status changes.
+Verification (all actually run):
+- **e2e: 55/55 passing** across 3 spec files. New product coverage includes: all three
+  boundary pairs (1000 ok / 1001 rejected, 60 ok / 61 rejected, 160 ok / 161 rejected), empty
+  and whitespace-only values, missing fields, an invalid status, admin routes returning 401
+  without a session, a rejected update leaving the row byte-for-byte unchanged, attempts to
+  change `name`/`characteristics`/`slug`/`id` all returning 400, the public catalogue never
+  containing a draft, a draft slug returning 404 with a message **identical** to an unknown
+  slug, public payloads omitting `id` and `status`, publish/unpublish flipping visibility, and
+  whitespace trimming.
+- **The boundary tests were mutation-tested**: temporarily changing `@MaxLength(60)` to
+  `@MaxLength(61)` made exactly one test fail — `rejects 61 characters` — confirming the test
+  actually constrains the limit rather than passing regardless. Reverted immediately, suite
+  green again.
+- `npm run lint` → 0 errors; `npm run build` → clean; `npm test` → 1/1.
+- Manual curl walkthrough against the running app: public catalogue returned only the two
+  published products; `GET /products/nimbus-standing-desk-mat` (the draft) → 404;
+  `GET /admin/products` without a cookie → 401; a 1001-character description → 400
+  `Description must be 1000 characters or fewer.`; `"name":"HACKED"` → 400
+  `property name should not exist`; re-reading the record afterwards confirmed the name and
+  description were untouched; unpublishing removed the product from both the catalogue and its
+  detail URL (404), and republishing restored it.
+- **Persistence across an application restart** (an explicit assignment requirement): a
+  distinctive description was saved through the API, the server process was stopped, absence
+  of any listener was proven (`curl` refused to connect), a fresh process was started, and the
+  value was still served. See `AI-WORKLOG.md` entry 6 — the first attempt at this test was
+  invalid and had to be redone.
+- Development data was restored to its seeded values afterwards.
 
 Proposed commit: `feat: add product REST API with server-side validation`
 

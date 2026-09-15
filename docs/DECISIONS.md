@@ -285,6 +285,36 @@ even though those columns exist. This is the mass-assignment protection.
 assignment states — non-empty, ≤ 1000, ≤ 60, ≤ 160 — is enforced server-side and covered by
 tests issued directly against the API rather than through the UI.
 
+### 6a. Implementation details settled in Phase 4
+
+- **Values are trimmed before validation.** Without it, `"   "` would satisfy a non-empty
+  check while being empty to a reader, and trailing whitespace would count toward the length
+  limits. Trimming first means the value that is validated is exactly the value stored.
+- **All four editable fields are required on `PATCH`.** The editor saves the whole form in one
+  explicit action, so requiring them guarantees every save re-validates every field — there is
+  no code path that writes a product without checking all of the assignment's limits.
+- **Read-only fields are rejected, not ignored.** `forbidNonWhitelisted` answers a payload
+  containing `name` with 400 `property name should not exist`. Silently dropping it would
+  return 200 and let the caller believe a rename had succeeded.
+- **Every query uses an explicit Prisma `select`.** Listing the fields that go out, rather
+  than excluding the ones that must not, means a column added to the schema later cannot leak
+  into a public response by default — the failure mode is a missing field, not an exposed one.
+- **The published filter lives in the database query.** `findFirst({ where: { slug, status:
+  'published' } })` rather than loading by slug and checking status afterwards: a draft is
+  never read, so it cannot survive a later refactor of the response mapping.
+- **Drafts answer 404, never 403, with a message identical to an unknown slug.** A 403 would
+  confirm that a draft exists at that slug, which is itself information the public should not
+  have. An e2e test asserts the two messages match.
+- **Separate admin and public controllers.** They have different audiences and different
+  response shapes; keeping them apart means a public route cannot accidentally inherit an
+  admin response shape or lose its published-only filter.
+- **The guard is applied at controller level.** `@UseGuards(JwtCookieGuard)` on
+  `AdminProductsController` protects every route it contains by construction, so a new
+  endpoint cannot be added unauthenticated by forgetting a decorator.
+- **`characteristics` is parsed defensively.** It is JSON text because SQLite has no JSON
+  column; a malformed value yields an empty list so the product page still renders, rather
+  than turning a display concern into a 500.
+
 ---
 
 ## 7. UI and styling — DECIDED: Tailwind v4, no component library

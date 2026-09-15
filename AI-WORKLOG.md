@@ -416,6 +416,79 @@ limitation test); `backend/test/create-test-app.ts` (`bodyOf`, `AdminBody`, `Err
 
 ---
 
+## 2026-09-15 — Entry 6: a verification that appeared to pass but proved nothing
+
+### Task
+
+Phase 4 added the product API. Two of the assignment's requirements are about behaviour that
+a passing status code does not demonstrate: that invalid data "is not saved, including through
+direct API requests", and that saved changes "remain after the application is restarted".
+
+### AI contribution
+
+Claude Code implemented the endpoints, the `UpdateProductDto` limits and a 37-case product
+e2e suite, and then checked its own work in two ways that went beyond running the suite.
+
+**1. Mutation-testing a boundary.** A green suite is not evidence that the tests constrain
+anything. To check the limits actually bite, `@MaxLength(60)` on `seoTitle` was temporarily
+changed to `@MaxLength(61)`. Exactly one test failed — `rejects 61 characters` — and the
+change was reverted. That is the evidence the boundary tests are load-bearing.
+
+**2. Catching an invalid verification of its own.** The restart requirement was tested by
+saving a distinctive description, stopping the server, restarting it and re-reading the value.
+The value came back, which looked like a pass. It was not:
+
+```
+Error: listen EADDRINUSE: address already in use :::3001
+```
+
+The background task's stop had killed the npm wrapper but left the `node` process running, so
+the "restarted" server had failed to start and the **original process** answered the request.
+The test proved only that a running server still had the data in memory-backed SQLite — not
+that anything survived a restart.
+
+The test was redone properly: the process holding port 3001 was killed directly, the absence
+of any listener was *proven* (`curl` refused to connect, exit code 000) rather than assumed,
+and only then was a fresh process started — a new PID, logging a clean boot — and the value
+re-read. It was still there.
+
+### Candidate contribution
+
+The standing rule for this project — never report something as working without running it,
+and treat a green result as a claim that itself needs checking — is what made both of these
+happen. The second case is the more important one: the first restart test produced the
+*expected output*, and only reading the background process's log revealed the result was
+meaningless. Accepting a passing test at face value would have put a false verification claim
+into this document.
+
+### Decision
+
+Both the mutation test and the corrected restart test were kept as recorded evidence rather
+than quietly reported as "verified". `docs/IMPLEMENTATION-PLAN.md` Phase 4 states explicitly
+that the first restart attempt was invalid and had to be redone.
+
+### Verification
+
+```
+npm run test:e2e   55/55 passing (3 spec files)
+mutation check     @MaxLength(60) -> (61) caused exactly 1 failure, then reverted
+npm run lint       0 errors
+npm run build      clean
+```
+
+Manual checks against the running API, beyond the suite: the public catalogue returned only
+the two published products; the draft slug returned 404; `/admin/products` without a cookie
+returned 401; a 1001-character description returned 400 and re-reading the record showed it
+unchanged; `"name":"HACKED"` returned 400 `property name should not exist` and the name was
+untouched; unpublishing removed the product from both the catalogue and its detail URL, and
+republishing restored it. Development data was restored to its seeded values afterwards.
+
+### Repository evidence
+
+`backend/src/products/`; `backend/test/products.e2e-spec.ts`; `docs/DECISIONS.md` §6a.
+
+---
+
 ## Required concrete examples
 
 The assignment asks for 2–3 concrete examples of AI-generated solutions that were evaluated
@@ -450,6 +523,12 @@ indistinguishable from unknown accounts in the response, and that unknown payloa
 are rejected rather than ignored. They do **not** prove the session cannot be stolen, and
 they deliberately do not claim logout revokes a token — one test asserts the opposite, because
 that is what a stateless JWT actually does.
+
+**Whether the tests themselves have teeth.** A passing suite is a claim, not evidence. The
+product boundary tests were mutation-tested: changing `@MaxLength(60)` to `@MaxLength(61)`
+made exactly one test fail (`rejects 61 characters`), which is what proves that test is
+actually constraining the limit. Several tests also assert the *stored row* rather than only
+the status code — a 400 response does not by itself show that nothing was written.
 
 **Where tests caught AI code, and where they did not.** Two AI mistakes in this project were
 invisible to the test suite and were caught only by running things:
