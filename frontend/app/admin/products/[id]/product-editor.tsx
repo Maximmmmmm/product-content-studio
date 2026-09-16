@@ -34,7 +34,6 @@ function valuesOf(product: AdminProduct): FormValues {
   };
 }
 
-/** Mirrors the server's rules so the UI can flag problems before submitting. */
 function fieldError(
   value: string,
   limit: number,
@@ -49,12 +48,10 @@ function fieldError(
 export function ProductEditor({ product }: { product: AdminProduct }) {
   const router = useRouter();
 
-  // The form owns its values. Nothing else may reset them — that is what makes
-  // a failed save non-destructive.
+  // Only a confirmed save may write to these two. That is what keeps a failed
+  // save from erasing the user's edits.
   const [values, setValues] = useState<FormValues>(() => valuesOf(product));
 
-  // What the server last confirmed as stored, used to detect unsaved changes.
-  // Updated only after a successful save.
   const [savedValues, setSavedValues] = useState<FormValues>(() =>
     valuesOf(product),
   );
@@ -82,8 +79,6 @@ export function ProductEditor({ product }: { product: AdminProduct }) {
 
   function update<K extends keyof FormValues>(key: K, value: FormValues[K]) {
     setValues((current) => ({ ...current, [key]: value }));
-    // Clear a previous outcome as soon as editing resumes, so a stale "Saved"
-    // can never sit next to unsaved edits.
     setSaveState({ kind: "idle" });
   }
 
@@ -103,7 +98,6 @@ export function ProductEditor({ product }: { product: AdminProduct }) {
     try {
       const updated = await updateAdminProduct(product.id, payload);
 
-      // Only a confirmed save advances the baseline.
       setSavedValues(valuesOf(updated));
       setValues(valuesOf(updated));
       setSaveState({ kind: "saved" });
@@ -114,8 +108,6 @@ export function ProductEditor({ product }: { product: AdminProduct }) {
         return;
       }
 
-      // Deliberately nothing here touches `values`: the user's edits stay on
-      // screen so they can retry without retyping.
       setSaveState({
         kind: "error",
         message:

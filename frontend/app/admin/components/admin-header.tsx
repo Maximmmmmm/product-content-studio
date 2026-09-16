@@ -14,9 +14,7 @@ export function AdminHeader() {
     try {
       await logout();
     } catch {
-      // Even if the request fails the user asked to leave, so send them to the
-      // login screen regardless; the server-side guard is what actually
-      // protects the data.
+      // The user asked to leave, so go regardless; the server guard is what protects data.
     }
     router.replace("/admin/login");
   }

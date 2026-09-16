@@ -1,56 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import {
-  ApiError,
-  listAdminProducts,
-  type AdminProductListItem,
-} from "@/lib/api";
+import { useCallback } from "react";
+import { listAdminProducts } from "@/lib/api";
+import { useApiResource } from "@/lib/use-api-resource";
 import { AdminHeader } from "../components/admin-header";
+import { ErrorNotice } from "../components/error-notice";
 import { StatusBadge } from "../components/status-badge";
 
 export default function AdminProductsPage() {
-  const router = useRouter();
-  const [products, setProducts] = useState<AdminProductListItem[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  // Incremented by "Try again" to re-run the effect below.
-  const [reloadToken, setReloadToken] = useState(0);
-
-  useEffect(() => {
-    // Guards against a slow response resolving after the user has navigated
-    // away, which would set state on an unmounted component.
-    let cancelled = false;
-
-    async function load() {
-      try {
-        const loaded = await listAdminProducts();
-        if (cancelled) return;
-        setProducts(loaded);
-        setError(null);
-      } catch (caught) {
-        if (cancelled) return;
-        // The server is what enforces access; the UI simply reacts to being
-        // told it is not authenticated.
-        if (caught instanceof ApiError && caught.isUnauthorized) {
-          router.replace("/admin/login");
-          return;
-        }
-        setError(
-          caught instanceof ApiError
-            ? caught.message
-            : "Could not load products.",
-        );
-      }
-    }
-
-    void load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [router, reloadToken]);
+  const load = useCallback(() => listAdminProducts(), []);
+  const {
+    data: products,
+    error,
+    retry,
+  } = useApiResource(load, "Could not load products.");
 
   return (
     <div className="min-h-dvh bg-zinc-50 dark:bg-zinc-950">
@@ -64,21 +28,7 @@ export default function AdminProductsPage() {
           Select a product to edit its description and SEO fields.
         </p>
 
-        {error ? (
-          <div
-            role="alert"
-            className="mt-6 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/50 dark:text-red-300"
-          >
-            <p>{error}</p>
-            <button
-              type="button"
-              onClick={() => setReloadToken((token) => token + 1)}
-              className="mt-2 font-medium underline underline-offset-4"
-            >
-              Try again
-            </button>
-          </div>
-        ) : null}
+        {error ? <ErrorNotice message={error} onRetry={retry} /> : null}
 
         {products === null && !error ? (
           <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">

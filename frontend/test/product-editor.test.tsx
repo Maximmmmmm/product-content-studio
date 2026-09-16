@@ -10,9 +10,6 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: mockReplace, refresh: mockRefresh }),
 }));
 
-// Only the network call is mocked. LIMITS, PRODUCT_STATUSES and ApiError stay
-// real, so the test exercises the same limits the server enforces rather than
-// a copy that could drift.
 const mockUpdate = vi.fn();
 vi.mock("@/lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api")>();
@@ -49,7 +46,6 @@ describe("ProductEditor", () => {
 
     expect(screen.getByText("Aurora Wireless Headphones")).toBeInTheDocument();
     expect(screen.getByText("Up to 30 hours")).toBeInTheDocument();
-    // There must be no input holding the name — it is not editable here.
     expect(
       screen.queryByDisplayValue("Aurora Wireless Headphones"),
     ).not.toBeInTheDocument();
@@ -61,8 +57,6 @@ describe("ProductEditor", () => {
 
     await user.type(screen.getByLabelText(/^description$/i), " edited");
 
-    // Typing alone must never persist: the assignment requires an explicit
-    // save action.
     expect(mockUpdate).not.toHaveBeenCalled();
   });
 
@@ -76,10 +70,6 @@ describe("ProductEditor", () => {
     expect(saveButton()).toBeEnabled();
   });
 
-  /**
-   * The assignment's key requirement for this screen: a failed save must not
-   * erase the user's edits and must not be presented as success.
-   */
   it("keeps the typed input and shows an error when saving fails", async () => {
     const user = userEvent.setup();
     mockUpdate.mockRejectedValue(
@@ -94,21 +84,17 @@ describe("ProductEditor", () => {
 
     await user.click(saveButton());
 
-    // The error is surfaced to the user...
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent(
       "SEO title must be 60 characters or fewer.",
     );
 
-    // ...the edit is still on screen, character for character...
     expect(description).toHaveValue(
       "Carefully written copy that must survive.",
     );
 
-    // ...and nothing claims the save succeeded.
     expect(screen.queryByText(/^saved$/i)).not.toBeInTheDocument();
 
-    // The user can retry without retyping.
     expect(saveButton()).toBeEnabled();
   });
 
@@ -144,7 +130,6 @@ describe("ProductEditor", () => {
     await user.clear(description);
     await user.type(description, "Saved description.");
 
-    // Not yet — the request has not happened.
     expect(screen.queryByText(/^saved$/i)).not.toBeInTheDocument();
 
     await user.click(saveButton());
@@ -173,7 +158,6 @@ describe("ProductEditor", () => {
 
     await user.type(description, " Two.");
 
-    // A stale "Saved" must never sit next to unsaved edits.
     expect(screen.queryByText(/^saved$/i)).not.toBeInTheDocument();
     expect(screen.getByText(/unsaved changes/i)).toBeInTheDocument();
   });

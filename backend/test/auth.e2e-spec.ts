@@ -1,6 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
-import { App } from 'supertest/types';
+import type { Server } from 'node:http';
 import {
   AdminBody,
   bodyOf,
@@ -11,17 +11,16 @@ import {
 import { TEST_ADMIN_EMAIL, TEST_ADMIN_PASSWORD } from './global-setup.js';
 
 describe('Authentication (e2e)', () => {
-  let app: INestApplication<App>;
+  let app: INestApplication<Server>;
 
   beforeAll(async () => {
-    app = (await createTestApp()) as INestApplication<App>;
+    app = await createTestApp();
   });
 
   afterAll(async () => {
     await app.close();
   });
 
-  /** Logs in and returns the session cookie for reuse. */
   async function login(): Promise<string> {
     const response = await request(app.getHttpServer())
       .post('/auth/login')
@@ -45,7 +44,6 @@ describe('Authentication (e2e)', () => {
       );
 
       expect(cookie).toBeDefined();
-      // The flag that stops page JavaScript (and therefore XSS) reading it.
       expect(cookie).toMatch(/HttpOnly/i);
       expect(cookie).toMatch(/SameSite=Lax/i);
 
@@ -95,7 +93,6 @@ describe('Authentication (e2e)', () => {
         .send({ email: 'nobody@example.com', password: TEST_ADMIN_PASSWORD })
         .expect(401);
 
-      // Any difference here would let an attacker enumerate valid accounts.
       expect(bodyOf<ErrorBody>(wrongPassword).message).toEqual(
         bodyOf<ErrorBody>(unknownEmail).message,
       );
@@ -158,7 +155,6 @@ describe('Authentication (e2e)', () => {
 
     it('rejects a tampered token with 401', async () => {
       const cookie = await login();
-      // Flip the final character of the signature.
       const tampered = cookie.replace(
         /session=([^;]+)/,
         (_match, token: string) =>
@@ -172,7 +168,6 @@ describe('Authentication (e2e)', () => {
     });
 
     it('rejects a token signed with a different secret with 401', async () => {
-      // A token that is structurally valid but not signed by this server.
       const foreign =
         'session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.' +
         'eyJzdWIiOiJhdHRhY2tlciIsImVtYWlsIjoiYXR0YWNrZXJAZXhhbXBsZS5jb20ifQ.' +
@@ -196,7 +191,6 @@ describe('Authentication (e2e)', () => {
     it('instructs the browser to drop the session cookie', async () => {
       const cookie = await login();
 
-      // Confirm the session works before logging out.
       await request(app.getHttpServer())
         .get('/auth/me')
         .set('Cookie', cookie)
@@ -209,7 +203,6 @@ describe('Authentication (e2e)', () => {
 
       const cleared = cookiesFrom(logout).find((c) => c.startsWith('session='));
       expect(cleared).toBeDefined();
-      // An empty value with an expiry in the past is how a cookie is deleted.
       expect(cleared).toMatch(/session=;/);
       expect(cleared).toMatch(/Expires=Thu, 01 Jan 1970/i);
     });
@@ -217,23 +210,9 @@ describe('Authentication (e2e)', () => {
     it('a browser following the clear-cookie instruction loses access', async () => {
       await login();
 
-      // supertest sends only what we set, so dropping the cookie models the
-      // browser having honoured the clear instruction.
       await request(app.getHttpServer()).get('/auth/me').expect(401);
     });
 
-    /**
-     * Documents a known and accepted limitation rather than hiding it.
-     *
-     * The session is a stateless JWT, so logout can only tell the browser to
-     * discard the cookie — it cannot revoke a token that was already copied
-     * elsewhere. Such a token stays valid until it expires. This is the
-     * trade-off recorded in docs/DECISIONS.md section 4; a server-side session
-     * store would be the fix if real revocation were required.
-     *
-     * The test asserts the real behaviour so that if we ever do add
-     * revocation, this test fails and forces the documentation to be updated.
-     */
     it('does NOT revoke an already-issued token (known stateless-JWT limitation)', async () => {
       const cookie = await login();
 
@@ -242,8 +221,6 @@ describe('Authentication (e2e)', () => {
         .set('Cookie', cookie)
         .expect(200);
 
-      // Replaying the captured token still works: logout is a client-side
-      // instruction, not server-side revocation.
       await request(app.getHttpServer())
         .get('/auth/me')
         .set('Cookie', cookie)

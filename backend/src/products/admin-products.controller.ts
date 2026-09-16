@@ -7,13 +7,7 @@ import {
   ProductsService,
 } from './products.service.js';
 
-/**
- * Administrative product endpoints.
- *
- * The guard is applied at the controller level so every route here is
- * protected by construction — a new endpoint cannot be added without
- * authentication by forgetting a decorator.
- */
+// Guarded at controller level so a new route here cannot be added unprotected.
 @Controller('admin/products')
 @UseGuards(JwtCookieGuard)
 export class AdminProductsController {

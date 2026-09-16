@@ -104,15 +104,21 @@ The draft is the one to check: it appears in the admin list, but
 
 ## Running the tests
 
+From the repository root, this runs all 76 tests — backend unit, backend end-to-end, and
+frontend component tests:
+
 ```bash
-# Backend — unit
-cd backend && npm test
+npm test
+```
 
-# Backend — end-to-end (creates and deletes its own throwaway database)
-cd backend && npm run test:e2e
+Individually:
 
-# Frontend — component tests
-cd frontend && npm test
+```bash
+npm run test:backend        # unit
+npm run test:backend:e2e    # end-to-end (creates and deletes its own throwaway database)
+npm run test:frontend       # React component tests
+npm run lint                # both apps
+npm run typecheck           # both apps
 ```
 
 No test needs a running server, a network connection, or an API key. The e2e suite builds
@@ -178,9 +184,11 @@ frontend/
     products/[slug]/        public product page + generateMetadata
     admin/login/            sign-in
     admin/products/         list and editor
+    error.tsx               error boundary for the public pages
   lib/
     api.ts                  browser API client (sends the cookie)
     server-api.ts           server-side client for public pages (no cookie)
+    use-api-resource.ts     shared admin data-loading hook
   test/                     React Testing Library specs
 
 docs/

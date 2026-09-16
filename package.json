@@ -13,9 +13,13 @@
     "lint:backend": "npm run lint --prefix backend",
     "lint:frontend": "npm run lint --prefix frontend",
     "lint": "npm run lint:backend && npm run lint:frontend",
+    "typecheck:backend": "npm run typecheck --prefix backend",
+    "typecheck:frontend": "npm run typecheck --prefix frontend",
+    "typecheck": "npm run typecheck:backend && npm run typecheck:frontend",
     "test:backend": "npm test --prefix backend",
     "test:backend:e2e": "npm run test:e2e --prefix backend",
-    "test": "npm run test:backend",
+    "test:frontend": "npm test --prefix frontend",
+    "test": "npm run test:backend && npm run test:backend:e2e && npm run test:frontend",
     "db:migrate": "npm run prisma:migrate --prefix backend",
     "db:seed": "npm run prisma:seed --prefix backend"
   }

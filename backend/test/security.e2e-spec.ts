@@ -1,22 +1,15 @@
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
-import { App } from 'supertest/types';
+import type { Server } from 'node:http';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 import { bodyOf, createTestApp } from './create-test-app.js';
 
-/**
- * Regression tests for findings from the Phase 7 security audit.
- *
- * These cover properties that are easy to lose silently: a header that comes
- * back when middleware is reordered, or a query that stops being parameterised
- * after a refactor to raw SQL.
- */
 describe('Security (e2e)', () => {
-  let app: INestApplication<App>;
+  let app: INestApplication<Server>;
   let prisma: PrismaService;
 
   beforeAll(async () => {
-    app = (await createTestApp()) as INestApplication<App>;
+    app = await createTestApp();
     prisma = app.get(PrismaService);
   });
 
@@ -61,7 +54,6 @@ describe('Security (e2e)', () => {
           .get(`/products/${encodeURIComponent(payload)}`)
           .expect(404);
 
-        // Nothing from the User table may appear in the response.
         expect(JSON.stringify(bodyOf<unknown>(response))).not.toMatch(
           /\$2[aby]\$/,
         );
@@ -69,7 +61,6 @@ describe('Security (e2e)', () => {
     );
 
     it('leaves the data intact after those attempts', async () => {
-      // If any payload had executed, the table would be gone or empty.
       expect(await prisma.product.count()).toBe(3);
       expect(await prisma.user.count()).toBe(1);
     });
@@ -88,10 +79,8 @@ describe('Security (e2e)', () => {
     it('stores the administrator password only as a bcrypt hash', async () => {
       const user = await prisma.user.findFirstOrThrow();
 
-      // bcrypt hashes start with $2a$/$2b$/$2y$ and are 60 characters long.
       expect(user.passwordHash).toMatch(/^\$2[aby]\$\d{2}\$/);
       expect(user.passwordHash).toHaveLength(60);
-      // The plaintext used by the seed must not be recoverable from the row.
       expect(user.passwordHash).not.toContain('e2e-password-123');
     });
   });

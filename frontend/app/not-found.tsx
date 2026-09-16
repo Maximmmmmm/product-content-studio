@@ -1,9 +1,5 @@
 import Link from "next/link";
 
-/**
- * Shown for unknown URLs and, deliberately, for draft products: a visitor
- * cannot tell whether a slug belongs to a draft or to nothing at all.
- */
 export default function NotFound() {
   return (
     <div className="flex min-h-dvh items-center justify-center bg-zinc-50 px-4 dark:bg-zinc-950">

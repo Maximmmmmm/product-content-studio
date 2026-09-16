@@ -5,14 +5,6 @@ import {
   PublicProductListItem,
 } from './products.service.js';
 
-/**
- * Public, unauthenticated product endpoints.
- *
- * Deliberately a separate controller from the admin one: the two have
- * different audiences and different response shapes, and keeping them apart
- * means the public routes cannot accidentally inherit an admin response or
- * lose their published-only filter.
- */
 @Controller('products')
 export class PublicProductsController {
   constructor(private readonly products: ProductsService) {}

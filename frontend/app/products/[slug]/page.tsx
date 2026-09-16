@@ -4,15 +4,9 @@ import { cache } from "react";
 import type { Metadata } from "next";
 import { fetchPublicProduct } from "@/lib/server-api";
 
-/**
- * `generateMetadata` and the page both need the product. Wrapping the fetch in
- * React's `cache` guarantees a single request per render rather than relying on
- * fetch memoisation behaving a particular way.
- */
 const getProduct = cache(fetchPublicProduct);
 
 interface PageProps {
-  // In Next 16, params is a Promise in server components.
   params: Promise<{ slug: string }>;
 }
 
@@ -26,9 +20,6 @@ export async function generateMetadata({
     return { title: "Product not found" };
   }
 
-  // The stored SEO fields are the page's title and description. React/Next
-  // escape these when rendering the document head, so content cannot break out
-  // of the tag it is placed in.
   return {
     title: product.seoTitle,
     description: product.seoDescription,
@@ -39,8 +30,6 @@ export default async function ProductPage({ params }: PageProps) {
   const { slug } = await params;
   const product = await getProduct(slug);
 
-  // A draft and an unknown slug are indistinguishable here: the API answers
-  // 404 for both, so a draft is unreachable by its public URL.
   if (!product) {
     notFound();
   }

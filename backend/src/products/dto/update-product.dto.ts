@@ -2,29 +2,13 @@ import { Transform, TransformFnParams } from 'class-transformer';
 import { IsIn, IsString, MaxLength, MinLength } from 'class-validator';
 import { PRODUCT_STATUSES, ProductStatus } from '../product-status.js';
 
-/**
- * Trims surrounding whitespace before validation runs.
- *
- * Without this, a description of "   " would satisfy a non-empty check while
- * being empty to a reader, and trailing whitespace would count towards the
- * length limits. Trimming first means the value that is validated is exactly
- * the value that gets stored.
- */
+// Trimmed before validation, so "   " fails the non-empty check and
+// whitespace does not count towards the limits.
 const trim = ({ value }: TransformFnParams): unknown =>
   typeof value === 'string' ? value.trim() : value;
 
-/**
- * The only fields an administrator may change.
- *
- * `name`, `characteristics`, `id` and `slug` are deliberately absent: combined
- * with the global ValidationPipe's `forbidNonWhitelisted`, sending any of them
- * is rejected with 400 rather than silently ignored. That is what stops a
- * direct API request from editing read-only product data.
- *
- * All four fields are required. The editor saves the whole form in one explicit
- * action, so every save re-validates every field — there is no path that writes
- * a product without checking all of the assignment's limits.
- */
+// Read-only fields are absent on purpose: with forbidNonWhitelisted, sending
+// name/slug/id is rejected rather than silently ignored.
 export class UpdateProductDto {
   @Transform(trim)
   @IsString({ message: 'Description is required.' })

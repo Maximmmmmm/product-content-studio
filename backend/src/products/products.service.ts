@@ -4,7 +4,6 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { UpdateProductDto } from './dto/update-product.dto.js';
 import { ProductStatus } from './product-status.js';
 
-/** One factual product attribute, as shown on the product page. */
 export interface Characteristic {
   label: string;
   value: string;
@@ -43,11 +42,6 @@ export interface PublicProduct {
   seoDescription: string;
 }
 
-/**
- * `characteristics` is stored as JSON text because SQLite has no JSON column
- * type. Parsing is defensive: a malformed value yields an empty list so the
- * product page still renders, rather than turning a display concern into a 500.
- */
 function parseCharacteristics(raw: string): Characteristic[] {
   try {
     const parsed: unknown = JSON.parse(raw);
@@ -69,7 +63,6 @@ function parseCharacteristics(raw: string): Characteristic[] {
 export class ProductsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Admin list: only what the list screen shows. */
   findAllForAdmin(): Promise<AdminProductListItem[]> {
     return this.prisma.product.findMany({
       select: { id: true, name: true, status: true },
@@ -103,13 +96,6 @@ export class ProductsService {
     };
   }
 
-  /**
-   * Applies an administrator's edits.
-   *
-   * Only the DTO's four fields are written. `name`, `characteristics`, `slug`
-   * and `id` are never part of the update payload, so they cannot be changed
-   * through this endpoint even if a request tries.
-   */
   async update(id: string, dto: UpdateProductDto): Promise<AdminProduct> {
     try {
       await this.prisma.product.update({
@@ -122,7 +108,7 @@ export class ProductsService {
         },
       });
     } catch (error) {
-      // P2025 = "record to update not found".
+      // P2025 = record to update not found.
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2025'
@@ -135,13 +121,6 @@ export class ProductsService {
     return this.findOneForAdmin(id);
   }
 
-  /**
-   * Public catalogue.
-   *
-   * The published filter is part of the database query, not a filter applied
-   * afterwards in JavaScript — a draft is never loaded, so it cannot leak
-   * through a later refactor of the response shape.
-   */
   findPublished(): Promise<PublicProductListItem[]> {
     return this.prisma.product.findMany({
       where: { status: ProductStatus.Published },
@@ -150,12 +129,6 @@ export class ProductsService {
     });
   }
 
-  /**
-   * Public product page.
-   *
-   * A draft and a genuinely unknown slug are both answered with 404 — never
-   * 403 — so the public API does not reveal that a draft with that slug exists.
-   */
   async findPublishedBySlug(slug: string): Promise<PublicProduct> {
     const product = await this.prisma.product.findFirst({
       where: { slug, status: ProductStatus.Published },
@@ -169,6 +142,7 @@ export class ProductsService {
       },
     });
 
+    // 404 rather than 403: a 403 would confirm a draft exists at this slug.
     if (!product) {
       throw new NotFoundException('Product not found.');
     }

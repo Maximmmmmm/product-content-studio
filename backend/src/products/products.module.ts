@@ -5,7 +5,6 @@ import { ProductsService } from './products.service.js';
 import { PublicProductsController } from './public-products.controller.js';
 
 @Module({
-  // AuthModule provides JwtCookieGuard, used by AdminProductsController.
   imports: [AuthModule],
   controllers: [AdminProductsController, PublicProductsController],
   providers: [ProductsService],

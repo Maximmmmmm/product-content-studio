@@ -1,14 +1,3 @@
-/**
- * Seeds the test administrator and three demonstration products.
- *
- * Run with `npm run prisma:seed` (or automatically by `prisma migrate reset`).
- * The script is idempotent: it upserts by unique key, so running it twice
- * leaves the same rows rather than failing or duplicating.
- *
- * The administrator password is read from the environment and stored only as a
- * bcrypt hash — no plaintext credential is ever written to the database or to
- * the repository.
- */
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
@@ -96,6 +85,7 @@ async function seedProducts(): Promise<void> {
   ];
 
   for (const product of products) {
+    // Empty update: re-seeding must not overwrite edits made in the admin.
     await prisma.product.upsert({
       where: { slug: product.slug },
       update: {},

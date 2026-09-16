@@ -1,6 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
-import { App } from 'supertest/types';
+import type { Server } from 'node:http';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 import { bodyOf, cookiesFrom, createTestApp } from './create-test-app.js';
 import { TEST_ADMIN_EMAIL, TEST_ADMIN_PASSWORD } from './global-setup.js';
@@ -31,7 +31,6 @@ interface PublicListItem {
   seoDescription: string;
 }
 
-/** A payload that passes validation, so single fields can be varied. */
 function validPayload(overrides: Record<string, unknown> = {}) {
   return {
     description: 'A valid description.',
@@ -43,13 +42,12 @@ function validPayload(overrides: Record<string, unknown> = {}) {
 }
 
 describe('Products (e2e)', () => {
-  let app: INestApplication<App>;
+  let app: INestApplication<Server>;
   let prisma: PrismaService;
   let cookie: string;
   let publishedId: string;
   let draftId: string;
 
-  /** The seeded rows, used to restore state between tests. */
   let snapshot: {
     id: string;
     description: string;
@@ -59,7 +57,7 @@ describe('Products (e2e)', () => {
   }[];
 
   beforeAll(async () => {
-    app = (await createTestApp()) as INestApplication<App>;
+    app = await createTestApp();
     prisma = app.get(PrismaService);
 
     const login = await request(app.getHttpServer())
@@ -92,7 +90,6 @@ describe('Products (e2e)', () => {
     ).id;
   });
 
-  // Tests below mutate products, so every test starts from the seeded state.
   beforeEach(async () => {
     for (const row of snapshot) {
       await prisma.product.update({
@@ -129,10 +126,6 @@ describe('Products (e2e)', () => {
         .expect(401);
     });
 
-    /**
-     * The status code alone would not prove the write was prevented — only
-     * that the response was 401. This checks the stored row too.
-     */
     it('writes nothing when an update is rejected for being unauthenticated', async () => {
       const before = await prisma.product.findUniqueOrThrow({
         where: { id: publishedId },
@@ -180,7 +173,6 @@ describe('Products (e2e)', () => {
 
       const product = bodyOf<AdminProductBody>(response);
       expect(product.slug).toBe(PUBLISHED_SLUG);
-      // Stored as JSON text in SQLite; the API returns a real array.
       expect(Array.isArray(product.characteristics)).toBe(true);
       expect(product.characteristics.length).toBeGreaterThan(0);
       expect(typeof product.characteristics[0].label).toBe('string');
@@ -293,10 +285,6 @@ describe('Products (e2e)', () => {
       });
     });
 
-    /**
-     * The assignment requires that invalid data is not saved. A 400 response
-     * is not sufficient evidence — the stored row has to be checked.
-     */
     it('leaves the stored row byte-for-byte unchanged when validation fails', async () => {
       const before = await prisma.product.findUniqueOrThrow({
         where: { id: publishedId },
@@ -332,11 +320,6 @@ describe('Products (e2e)', () => {
         .send(payload);
     }
 
-    /**
-     * Rejecting rather than silently ignoring matters: a caller that sends
-     * `name` gets told it was refused, instead of receiving 200 and believing
-     * the rename succeeded.
-     */
     it('rejects an attempt to change the name', async () => {
       await patch(validPayload({ name: 'Renamed By API' })).then((r) =>
         expect(r.status).toBe(400),
@@ -404,10 +387,6 @@ describe('Products (e2e)', () => {
       expect(product).not.toHaveProperty('status');
     });
 
-    /**
-     * 404 rather than 403: a 403 would confirm that a draft exists at this
-     * slug, which is itself information the public should not have.
-     */
     it('returns 404 — not 403 — for a draft', async () => {
       const response = await request(app.getHttpServer())
         .get(`/products/${DRAFT_SLUG}`)
@@ -490,17 +469,6 @@ describe('Products (e2e)', () => {
       ).not.toContain(PUBLISHED_SLUG);
     });
 
-    /**
-     * Pins a deliberate architectural choice: content is stored exactly as the
-     * author typed it and escaped when rendered, rather than sanitised on the
-     * way in.
-     *
-     * Storing raw text means there is no sanitiser that can be wrong or
-     * bypassed, and the frontend renders it as a React text node (with the
-     * `react/no-danger` ESLint rule preventing `dangerouslySetInnerHTML`
-     * anywhere). If someone later adds input sanitising, this test fails and
-     * forces that decision to be made consciously.
-     */
     it('stores and returns author content verbatim, without sanitising it', async () => {
       const payload = '<script>alert("xss")</script> & <b>bold</b>';
 
@@ -514,7 +482,6 @@ describe('Products (e2e)', () => {
         .get(`/products/${PUBLISHED_SLUG}`)
         .expect(200);
 
-      // Byte-for-byte what was submitted: not stripped, not HTML-encoded.
       expect(bodyOf<{ description: string }>(response).description).toBe(
         payload,
       );
