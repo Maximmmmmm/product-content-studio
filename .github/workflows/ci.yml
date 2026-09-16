@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (NestJS + Prisma/SQLite)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: file:./ci.db
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies (runs prisma generate)
+        run: npm ci --prefix backend
+
+      - name: Check formatting
+        run: npm run format:check --prefix backend
+
+      - name: Lint
+        run: npm run lint:backend
+
+      - name: Typecheck
+        run: npm run typecheck:backend
+
+      - name: Unit tests
+        run: npm run test:backend
+
+      - name: E2E tests
+        run: npm run test:backend:e2e
+
+      - name: Build
+        run: npm run build:backend
+
+  frontend:
+    name: Frontend (Next.js)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: 1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --prefix frontend
+
+      - name: Check formatting
+        run: npm run format:check --prefix frontend
+
+      - name: Lint
+        run: npm run lint:frontend
+
+      - name: Typecheck
+        run: npm run typecheck:frontend
+
+      - name: Unit tests
+        run: npm run test:frontend
+
+      - name: Build
+        run: npm run build:frontend
