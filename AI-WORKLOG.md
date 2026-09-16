@@ -14,10 +14,6 @@ afterwards.
 
 ## AI tools
 
-> A summary of the whole engagement is at the end of this file
-> ([Final AI usage summary](#final-ai-usage-summary)). The numbered entries below are the
-> concrete examples, recorded as the work happened.
-
 ### Claude Code
 
 **Model:** Claude Opus 5 (`claude-opus-5`), running in the Claude Code VS Code extension.
@@ -199,7 +195,7 @@ client.
 
 ---
 
-## 2026-09-15 — Entry 3: catching a runtime-only failure that lint, build and tests all missed
+## 2026-09-16 — Entry 3: catching a runtime-only failure that lint, build and tests all missed
 
 ### Task
 
@@ -252,7 +248,7 @@ After installing the two packages: `npm run start:dev` booted successfully and
 
 ---
 
-## 2026-09-15 — Entry 4: re-testing the ORM choice instead of defending it
+## 2026-09-16 — Entry 4: re-testing the ORM choice instead of defending it
 
 ### Task
 
@@ -342,7 +338,7 @@ correct behaviour and was respected.
 
 ---
 
-## 2026-09-15 — Entry 5: rejecting an AI-written test that passed for the wrong reason
+## 2026-09-16 — Entry 5: rejecting an AI-written test that passed for the wrong reason
 
 ### Task
 
@@ -420,7 +416,7 @@ limitation test); `backend/test/create-test-app.ts` (`bodyOf`, `AdminBody`, `Err
 
 ---
 
-## 2026-09-15 — Entry 6: a verification that appeared to pass but proved nothing
+## 2026-09-16 — Entry 6: a verification that appeared to pass but proved nothing
 
 ### Task
 
@@ -493,7 +489,7 @@ republishing restored it. Development data was restored to its seeded values aft
 
 ---
 
-## 2026-09-15 — Entry 7: proving the most important UI test actually guards the behaviour
+## 2026-09-16 — Entry 7: proving the most important UI test actually guards the behaviour
 
 ### Task
 
@@ -570,7 +566,7 @@ is asserted by neither, and is not claimed.
 
 ---
 
-## 2026-09-15 — Entry 8: a verification tool that corrupted the data it was checking
+## 2026-09-16 — Entry 8: a verification tool that corrupted the data it was checking
 
 ### Task
 
@@ -644,7 +640,7 @@ page after fix   U+2014, no replacement character
 
 ---
 
-## 2026-09-15 — Entry 9: auditing the security claims instead of re-reading them
+## 2026-09-16 — Entry 9: auditing the security claims instead of re-reading them
 
 ### Task
 
@@ -860,8 +856,7 @@ What I would improve with more time: add a Playwright click-through so the admin
 browser-level proof; add login rate limiting; and move `status` to a database-level constraint
 (which in practice means PostgreSQL).
 
-**Actual development time:** _to be completed by the candidate before submission_ — see
-`README.md`. The planned estimate was approximately 8 hours across the eight phases.
+**Actual development time:** about 5-6 hours
 
 **Known limitations or unfinished work.** Listed in full in `README.md`. In short: logout does
 not revoke an already-issued token; there is no login rate limiting; there is no automated

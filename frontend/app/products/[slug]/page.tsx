@@ -59,10 +59,6 @@ export default async function ProductPage({ params }: PageProps) {
           {product.name}
         </h1>
 
-        {/* Rendered as a React text node. React escapes text children, so
-            stored content is displayed, never executed as markup. There is no
-            `dangerouslySetInnerHTML` anywhere in this project, and the
-            `react/no-danger` ESLint rule keeps it that way. */}
         <p className="mt-5 leading-relaxed whitespace-pre-line text-zinc-700 dark:text-zinc-300">
           {product.description}
         </p>

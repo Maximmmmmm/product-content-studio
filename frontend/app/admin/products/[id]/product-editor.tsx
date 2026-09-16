@@ -48,8 +48,6 @@ function fieldError(
 export function ProductEditor({ product }: { product: AdminProduct }) {
   const router = useRouter();
 
-  // Only a confirmed save may write to these two. That is what keeps a failed
-  // save from erasing the user's edits.
   const [values, setValues] = useState<FormValues>(() => valuesOf(product));
 
   const [savedValues, setSavedValues] = useState<FormValues>(() =>
@@ -253,8 +251,6 @@ export function ProductEditor({ product }: { product: AdminProduct }) {
           {saveState.kind === "saving" ? "Saving…" : "Save changes"}
         </button>
 
-        {/* Each outcome is distinct, and "Saved" appears only after the server
-            confirms the write. */}
         {saveState.kind === "saved" ? (
           <span
             role="status"

@@ -47,9 +47,6 @@ export default function AdminProductPage() {
               </h1>
               <StatusBadge status={product.status} />
             </div>
-
-            {/* Keyed by product so one product's edits cannot carry into another. */}
-            {/* Keyed by product so one product's edits cannot carry into another. */}
             <ProductEditor key={product.id} product={product} />
           </>
         ) : null}

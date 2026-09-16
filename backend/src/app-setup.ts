@@ -3,8 +3,6 @@ import { ConfigService } from '@nestjs/config';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 
-// Shared with the e2e tests so they exercise the configuration that ships,
-// not a bare TestingModule app without cookies or validation.
 export function configureApp(app: INestApplication): INestApplication {
   const config = app.get(ConfigService);
 

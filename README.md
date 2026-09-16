@@ -80,7 +80,7 @@ from `.env.example`:
 |---|---|
 | URL | http://localhost:3000/admin/login |
 | Email | `admin@example.com` |
-| Password | `ChangeMe123!` |
+| Password | `admin` |
 
 These are development defaults, not a real credential: the account is created locally on your
 machine from whatever your `.env` contains. Change `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`
@@ -326,12 +326,7 @@ Figma workflow, and Docker/CI. The mandatory scope is complete.
 
 ## Time spent
 
-<!-- Replace with your actual figure before submitting. -->
-_To be completed by the candidate._
-
-The planned breakdown, for reference, was roughly: setup and tooling 0.75 h, database and seed
-1 h, authentication 1.25 h, product API 1.25 h, admin UI 1.5 h, public pages 0.75 h, security
-audit 0.75 h, documentation 0.75 h — about 8 hours in total.
+about 5-6 hours
 
 ---
 

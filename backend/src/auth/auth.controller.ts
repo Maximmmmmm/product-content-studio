@@ -44,7 +44,6 @@ export class AuthController {
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   logout(@Res({ passthrough: true }) response: Response): { success: true } {
-    // Must match the attributes it was set with, or the browser keeps it.
     response.clearCookie(SESSION_COOKIE, this.cookieOptions());
 
     return { success: true };

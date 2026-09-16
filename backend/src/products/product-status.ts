@@ -1,4 +1,3 @@
-// SQLite has no enum type, so status is a String column constrained here.
 export const PRODUCT_STATUSES = ['draft', 'published'] as const;
 
 export type ProductStatus = (typeof PRODUCT_STATUSES)[number];

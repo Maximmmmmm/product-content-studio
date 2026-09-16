@@ -20,8 +20,6 @@ export default function LoginPage() {
       await login(email, password);
       router.replace("/admin/products");
     } catch (caught) {
-      // The typed credentials are deliberately left in place so the user can
-      // correct a typo instead of retyping both fields.
       setError(
         caught instanceof ApiError
           ? caught.message

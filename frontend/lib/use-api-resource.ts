@@ -10,7 +10,6 @@ interface ApiResource<T> {
   retry: () => void;
 }
 
-// Pass a `load` wrapped in useCallback — it decides when to refetch.
 export function useApiResource<T>(
   load: () => Promise<T>,
   fallbackMessage: string,

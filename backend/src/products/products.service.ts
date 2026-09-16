@@ -61,7 +61,7 @@ function parseCharacteristics(raw: string): Characteristic[] {
 
 @Injectable()
 export class ProductsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   findAllForAdmin(): Promise<AdminProductListItem[]> {
     return this.prisma.product.findMany({
@@ -108,7 +108,6 @@ export class ProductsService {
         },
       });
     } catch (error) {
-      // P2025 = record to update not found.
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2025'
@@ -142,7 +141,6 @@ export class ProductsService {
       },
     });
 
-    // 404 rather than 403: a 403 would confirm a draft exists at this slug.
     if (!product) {
       throw new NotFoundException('Product not found.');
     }

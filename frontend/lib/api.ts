@@ -113,7 +113,6 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     try {
       body = await response.json();
     } catch {
-      // Non-JSON error body; the status code below still gives a usable message.
     }
     throw new ApiError(
       readErrorMessage(body, response.status),

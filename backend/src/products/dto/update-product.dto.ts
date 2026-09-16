@@ -2,13 +2,9 @@ import { Transform, TransformFnParams } from 'class-transformer';
 import { IsIn, IsString, MaxLength, MinLength } from 'class-validator';
 import { PRODUCT_STATUSES, ProductStatus } from '../product-status.js';
 
-// Trimmed before validation, so "   " fails the non-empty check and
-// whitespace does not count towards the limits.
 const trim = ({ value }: TransformFnParams): unknown =>
   typeof value === 'string' ? value.trim() : value;
 
-// Read-only fields are absent on purpose: with forbidNonWhitelisted, sending
-// name/slug/id is rejected rather than silently ignored.
 export class UpdateProductDto {
   @Transform(trim)
   @IsString({ message: 'Description is required.' })
