@@ -112,8 +112,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     let body: unknown = null;
     try {
       body = await response.json();
-    } catch {
-    }
+    } catch {}
     throw new ApiError(
       readErrorMessage(body, response.status),
       response.status,

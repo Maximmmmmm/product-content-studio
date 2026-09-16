@@ -61,7 +61,7 @@ function parseCharacteristics(raw: string): Characteristic[] {
 
 @Injectable()
 export class ProductsService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   findAllForAdmin(): Promise<AdminProductListItem[]> {
     return this.prisma.product.findMany({
